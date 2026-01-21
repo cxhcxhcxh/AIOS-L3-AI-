@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { 
   BarChart, 
   School, 
@@ -10,28 +11,51 @@ import {
   MessageSquare, 
   X, 
   Send, 
-  CheckCircle2,
-  AlertCircle,
-  Layout,
-  Cpu,
-  ListTodo,
-  Trash2,
-  Eye,
-  Plus,
-  Layers,
-  Zap,
-  Activity,
-  FileCheck,
-  ZoomIn,
-  ZoomOut,
-  RefreshCw,
-  MoreHorizontal,
-  Maximize2,
-  TrendingUp,
-  Award
+  CheckCircle2, 
+  AlertCircle, 
+  Layout, 
+  Cpu, 
+  Trash2, 
+  Eye, 
+  Plus, 
+  Layers, 
+  Zap, 
+  Activity, 
+  FileCheck, 
+  ZoomIn, 
+  ZoomOut, 
+  RefreshCw, 
+  MoreHorizontal, 
+  Maximize2, 
+  TrendingUp, 
+  Award, 
+  Sparkles, 
+  ChevronLeft, 
+  ChevronRight, 
+  Save, 
+  Edit3, 
+  Loader2, 
+  GripVertical, 
+  Compass, 
+  Trello, 
+  ShieldCheck, 
+  Target, 
+  Wand2, 
+  Binary, 
+  GitBranch, 
+  Table as TableIcon, 
+  MousePointer2, 
+  EyeIcon, 
+  Mic2, 
+  Search, 
+  Move,
+  Monitor,
+  Maximize,
+  Clock,
+  Users
 } from 'lucide-react';
-import { UNIVERSITIES, FINANCIAL_DATA } from './constants';
-import { UniversityData } from './types';
+import { INITIAL_UNIVERSITIES, INITIAL_TIMELINE, INITIAL_TOTAL_BUDGET, ENTERPRISE_PERCENT, GOVERNMENT_PERCENT } from './constants';
+import { UniversityData, TimelineNode } from './types';
 
 // --- Utils ---
 const scrollToSection = (id: string) => {
@@ -41,13 +65,19 @@ const scrollToSection = (id: string) => {
   }
 };
 
+const HighlightText = ({ children }: { children?: React.ReactNode }) => (
+  <span className="bg-blue-500/20 text-blue-400 px-1 rounded border border-blue-500/30 font-bold">
+    {children}
+  </span>
+);
+
 // --- Gemini Service Integration ---
-const GeminiChatWidget = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const GeminiChatWidget = ({ isOpen, setIsOpen, autoPrompt, universities }: { isOpen: boolean, setIsOpen: (v: boolean) => void, autoPrompt: string, universities: UniversityData[] }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const processedPromptRef = useRef('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,21 +85,29 @@ const GeminiChatWidget = () => {
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim()) return;
-    
-    const userMsg = inputValue;
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setInputValue('');
+  const generateResponse = async (userMsg: string) => {
     setIsLoading(true);
-
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const systemInstruction = "你是一个专业的项目评审专家，正在协助用户分析'智己汽车2025年度校企共创专项方案'。你需要根据已有的四个学校（上海交大、上海理工、华东理工、清华大学）的方案特点进行回答。回答要简洁、专业，适合汇报场景。";
+      const systemInstruction = `你是一个专业的项目评审专家，正在协助用户分析'智己AIOS 2025~2026年度校企共创专项方案'。
+以下是本次参与评审的四个高校方案当前详细数据：
+
+${universities.map(u => `
+=== ${u.name} (${u.abbr}) ===
+[核心概念]
+${u.concept}
+[优势]
+${u.pros.join('; ')}
+[方案摘要]
+${u.summary}
+`).join('\n')}
+
+你的回答需要专业、客观，侧重于技术落地与投资价值分析。`;
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
+          ...messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
           { role: 'user', parts: [{ text: userMsg }] }
         ],
         config: {
@@ -81,11 +119,27 @@ const GeminiChatWidget = () => {
       setMessages(prev => [...prev, { role: 'model', text }]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: "API 连接错误，请检查配置。" }]);
+      setMessages(prev => [...prev, { role: 'model', text: "API 连接错误或配额超限，请稍后重试。" }]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSend = async () => {
+    if (!inputValue.trim()) return;
+    const userMsg = inputValue;
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setInputValue('');
+    await generateResponse(userMsg);
+  };
+
+  useEffect(() => {
+    if (autoPrompt && autoPrompt !== processedPromptRef.current && isOpen) {
+      processedPromptRef.current = autoPrompt;
+      setMessages(prev => [...prev, { role: 'user', text: autoPrompt }]);
+      generateResponse(autoPrompt);
+    }
+  }, [autoPrompt, isOpen]);
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
@@ -93,8 +147,8 @@ const GeminiChatWidget = () => {
         <div className="bg-neutral-900 border border-neutral-700 w-96 h-[500px] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="bg-neutral-800 p-4 border-b border-neutral-700 flex justify-between items-center">
             <h3 className="font-bold text-white flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-blue-400" /> 
-              Gemini 智囊团
+              <Sparkles className="w-4 h-4 text-blue-400" /> 
+              Gemini 决策顾问
             </h3>
             <button onClick={() => setIsOpen(false)} className="text-neutral-400 hover:text-white">
               <X className="w-5 h-5" />
@@ -102,8 +156,8 @@ const GeminiChatWidget = () => {
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
-              <div className="text-neutral-500 text-sm text-center mt-10">
-                请问有什么关于这四个高校方案的问题？
+              <div className="text-neutral-500 text-sm text-center mt-10 px-4">
+                请就方案的投资优先级、技术风险或跨校组合向我提问。
               </div>
             )}
             {messages.map((m, idx) => (
@@ -111,17 +165,19 @@ const GeminiChatWidget = () => {
                 <div className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed ${
                   m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-200'
                 }`}>
-                  {m.text}
+                  {m.role === 'model' ? (
+                     <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{__html: m.text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')}} />
+                  ) : m.text}
                 </div>
               </div>
             ))}
-            {isLoading && <div className="text-neutral-500 text-xs ml-2 animate-pulse">正在思考...</div>}
+            {isLoading && <div className="text-neutral-500 text-xs ml-2 animate-pulse flex items-center gap-2"><Sparkles className="w-3 h-3"/> 深度解析中...</div>}
             <div ref={messagesEndRef} />
           </div>
           <div className="p-3 bg-neutral-800 border-t border-neutral-700 flex gap-2">
             <input 
               className="flex-1 bg-neutral-900 border border-neutral-700 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-              placeholder="输入问题..."
+              placeholder="询问投资组合建议..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -138,23 +194,24 @@ const GeminiChatWidget = () => {
       )}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
+        className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 group"
       >
-        <MessageSquare className="w-6 h-6" />
+        <MessageSquare className="w-6 h-6 group-hover:hidden" />
+        <Sparkles className="w-6 h-6 hidden group-hover:block" />
       </button>
     </div>
   );
 };
 
-// --- Components ---
+// --- Sub-Components ---
 
-const Navigation = () => (
+const Navigation = ({ universities }: { universities: UniversityData[] }) => (
   <nav className="fixed top-0 left-0 w-full z-40 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800 h-16 flex items-center justify-between px-10 shadow-lg">
     <div className="text-xl font-bold text-white tracking-wider flex items-center gap-3 cursor-pointer" onClick={() => scrollToSection('overview')}>
       <span className="w-2 h-6 bg-blue-500 rounded-sm"></span>
       <div className="flex flex-col leading-none">
         <span className="tracking-widest">IM MOTORS</span>
-        <span className="text-neutral-500 text-[10px] font-normal tracking-normal mt-0.5">2025 校企共创报告</span>
+        <span className="text-neutral-500 text-[10px] font-normal tracking-normal mt-0.5">2025~2026 校企共创报告</span>
       </div>
     </div>
     <div className="flex gap-10 text-base font-medium text-neutral-400">
@@ -174,7 +231,7 @@ const Navigation = () => (
   </nav>
 );
 
-const SchoolSidebar = () => {
+const SchoolSidebar = ({ universities }: { universities: UniversityData[] }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -186,10 +243,8 @@ const SchoolSidebar = () => {
         >
           <MoreHorizontal className="w-4 h-4" />
         </button>
-        
         <div className="flex flex-col gap-6">
-          <div className="text-xs font-bold text-neutral-500 uppercase tracking-widest writing-mode-vertical rotate-180 hidden">Universities</div>
-          {UNIVERSITIES.map(u => (
+          {universities.map(u => (
             <button 
               key={u.id} 
               onClick={() => scrollToSection(`${u.id}-content`)}
@@ -199,9 +254,6 @@ const SchoolSidebar = () => {
               <div className={`w-10 h-10 rounded-lg ${u.themeColor} flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-110 transition-transform`}>
                 {u.logoLetter}
               </div>
-              <span className="absolute left-14 bg-black/80 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                {u.name}
-              </span>
             </button>
           ))}
         </div>
@@ -210,348 +262,139 @@ const SchoolSidebar = () => {
   )
 }
 
-const SectionContainer = ({ id, children, className = "" }: { id: string, children?: React.ReactNode, className?: string }) => (
-  <section id={id} className={`snap-section w-full h-screen flex flex-col justify-start px-4 md:px-12 pt-20 pb-4 overflow-hidden ${className}`}>
-    <div className="w-full h-full flex flex-col max-w-[1920px] mx-auto">
+const SectionContainer = ({ id, children, className = "", isLast = false }: { id: string; children?: React.ReactNode; className?: string; isLast?: boolean }) => (
+  <section id={id} className={`snap-section w-full h-screen flex flex-col justify-start px-4 md:px-12 pt-16 pb-4 overflow-hidden ${className}`}>
+    <div className="w-full h-full flex flex-col max-w-[1920px] mx-auto relative px-6">
       {children}
+      {isLast && (
+        <div className="absolute bottom-4 left-0 w-full flex justify-center pointer-events-none">
+           <p className="text-neutral-500 font-mono text-[12px] tracking-[0.5em] uppercase font-bold">
+              CONFIDENTIAL - INTERNAL USE ONLY 智己软件 陈晓华
+           </p>
+        </div>
+      )}
     </div>
   </section>
 );
 
-const UniContentScreen = ({ data }: { data: UniversityData }) => {
-  // Parsing extracts to be structural
-  const findExtract = (key: string) => data.extracts.find(e => e.startsWith(key))?.split('：')[1] || '';
-  
-  return (
-    <div className="h-full flex flex-col pb-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8 border-b border-neutral-800 pb-6">
-        <div className="flex items-center gap-6">
-          <div className={`flex items-center justify-center w-16 h-16 rounded-2xl ${data.themeColor} text-white text-4xl font-bold shadow-2xl shadow-${data.themeColor.split('-')[1]}-500/30`}>
-            {data.logoLetter}
-          </div>
-          <div>
-            <h2 className="text-6xl font-bold text-white tracking-tight leading-none">{data.name}</h2>
-            <div className="text-neutral-400 text-lg uppercase tracking-[0.2em] font-medium mt-2">Proposal Analysis Report</div>
-          </div>
-        </div>
-        <div className="text-right">
-           <div className={`text-xl font-bold px-6 py-2 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300`}>
-             Code: {data.id.toUpperCase()}
-           </div>
-        </div>
-      </div>
-
-      <div className="flex-1 grid grid-cols-12 gap-10 min-h-0">
-        {/* Left Column: Concept & Strategy */}
-        <div className="col-span-8 flex flex-col gap-8">
-           {/* Top: Concept */}
-           <div className="bg-neutral-800/30 p-10 rounded-3xl border border-neutral-700/50 backdrop-blur-sm">
-             <h3 className="text-blue-400 font-bold mb-6 flex items-center gap-3 text-lg uppercase tracking-wider">
-                <Layout className="w-6 h-6" /> 核心创意概念
-             </h3>
-             <p className="text-3xl md:text-4xl text-white font-light leading-snug">
-               {data.concept}
-             </p>
-           </div>
-
-           {/* Middle: Details Grid */}
-           <div className="flex-1 grid grid-cols-2 gap-8">
-              <div className="bg-neutral-900/60 p-8 rounded-2xl border border-neutral-800 flex flex-col">
-                 <h4 className="text-neutral-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-blue-500"></div> 设计思路
-                 </h4>
-                 <p className="text-neutral-200 text-xl leading-relaxed flex-1">
-                   {findExtract('设计思路') || data.extracts[1]}
-                 </p>
-              </div>
-              <div className="bg-neutral-900/60 p-8 rounded-2xl border border-neutral-800 flex flex-col">
-                 <h4 className="text-neutral-400 font-bold mb-4 text-sm uppercase flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-violet-500"></div> 方案规划
-                 </h4>
-                 <p className="text-neutral-200 text-xl leading-relaxed flex-1">
-                   {findExtract('方案规划') || data.extracts[2]}
-                 </p>
-              </div>
-           </div>
-
-           {/* Bottom: Team */}
-           <div className="bg-neutral-900/60 p-6 rounded-2xl border border-neutral-800">
-               <div className="flex items-center gap-6">
-                  <div className="bg-neutral-800 p-3 rounded-xl shrink-0"><Cpu className="w-8 h-8 text-neutral-400"/></div>
-                  <div>
-                    <h4 className="text-neutral-500 font-bold text-sm uppercase mb-1">实施与资质</h4>
-                    <p className="text-neutral-200 text-lg font-medium">{findExtract('实施计划') || findExtract('团队资质') || data.extracts[3]}</p>
-                  </div>
-               </div>
-           </div>
-        </div>
-
-        {/* Right Column: Pros/Cons (Vertical) */}
-        <div className="col-span-4 flex flex-col gap-8">
-          <div className="flex-1 bg-gradient-to-br from-neutral-800/20 to-neutral-900/50 p-8 rounded-3xl border border-neutral-700/50 flex flex-col shadow-lg">
-            <h4 className="text-emerald-400 font-bold mb-6 text-xl flex items-center gap-3 uppercase">
-              <CheckCircle2 className="w-6 h-6" /> 核心优势
-            </h4>
-            <ul className="space-y-6 flex-1">
-              {data.pros.map((p, i) => (
-                <li key={i} className="flex gap-4 text-lg text-neutral-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-2.5 shrink-0"></span>
-                  <span className="leading-relaxed">{p}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="flex-1 bg-gradient-to-br from-neutral-800/20 to-neutral-900/50 p-8 rounded-3xl border border-neutral-700/50 flex flex-col shadow-lg">
-            <h4 className="text-rose-400 font-bold mb-6 text-xl flex items-center gap-3 uppercase">
-              <AlertCircle className="w-6 h-6" /> 潜在风险
-            </h4>
-            <ul className="space-y-6 flex-1">
-              {data.cons.map((p, i) => (
-                <li key={i} className="flex gap-4 text-lg text-neutral-200">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 mt-2.5 shrink-0"></span>
-                  <span className="leading-relaxed">{p}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ImagePreviewModal = ({ src, onClose }: { src: string, onClose: () => void }) => {
+// --- Asset Image Manager ---
+const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: UniversityData) => void }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-    setScale(s => Math.min(Math.max(0.5, s - e.deltaY * 0.001), 4));
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files) as File[];
+      const newImages = files.map(f => ({ label: f.name, url: URL.createObjectURL(f) }));
+      onUpdate({
+        ...uni,
+        assets: {
+          ...uni.assets,
+          images: [...uni.assets.images, ...newImages]
+        }
+      });
     }
   };
 
-  const handleMouseUp = () => setIsDragging(false);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col animate-in fade-in duration-200" onClick={onClose}>
-       <div className="absolute top-0 w-full p-4 flex justify-between items-center z-50 bg-black/50 backdrop-blur-sm" onClick={e => e.stopPropagation()}>
-          <div className="text-white text-lg font-medium">预览模式 (Preview)</div>
-          <div className="flex items-center gap-4">
-            <button onClick={() => setScale(s => Math.min(s + 0.5, 4))} className="p-2 bg-neutral-800 rounded-full text-white hover:bg-neutral-700"><ZoomIn/></button>
-            <button onClick={() => setScale(s => Math.max(s - 0.5, 0.5))} className="p-2 bg-neutral-800 rounded-full text-white hover:bg-neutral-700"><ZoomOut/></button>
-            <button onClick={() => { setScale(1); setPosition({x:0,y:0}) }} className="p-2 bg-neutral-800 rounded-full text-white hover:bg-neutral-700"><RefreshCw className="w-5 h-5"/></button>
-            <button onClick={onClose} className="p-2 bg-rose-600 rounded-full text-white hover:bg-rose-500"><X className="w-5 h-5"/></button>
-          </div>
-       </div>
-       <div 
-         className="flex-1 flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
-         onWheel={handleWheel}
-         onMouseDown={handleMouseDown}
-         onMouseMove={handleMouseMove}
-         onMouseUp={handleMouseUp}
-         onMouseLeave={handleMouseUp}
-         onClick={e => e.stopPropagation()}
-       >
-         <img 
-           src={src} 
-           alt="Preview" 
-           style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transition: isDragging ? 'none' : 'transform 0.1s' }}
-           className="max-w-full max-h-full object-contain pointer-events-none select-none" 
-         />
-       </div>
-    </div>
-  )
-}
-
-const UniResourceScreen = ({ data }: { data: UniversityData }) => {
-  // State initialization includes recommended images so they are fully mutable (deletable)
-  const [images, setImages] = useState<Array<{url: string, label: string}>>(() => {
-    return data.uploadConfig.recommendedImages.map((label, i) => ({
-      url: `https://picsum.photos/800/600?random=${data.id}${i}`,
-      label: label
-    }));
-  });
-  
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [hasPdf, setHasPdf] = useState(data.uploadConfig.hasDoc); // Initial state for simulation
-  const [previewImg, setPreviewImg] = useState<string | null>(null);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      setImages(prev => [...prev, { url, label: file.name }]);
-    }
+  const removeImage = (idx: number) => {
+    const newImages = [...uni.assets.images];
+    newImages.splice(idx, 1);
+    onUpdate({ ...uni, assets: { ...uni.assets, images: newImages } });
   };
 
-  const handleDeleteImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+  const moveImage = (from: number, to: number) => {
+    const newImages = [...uni.assets.images];
+    const [moved] = newImages.splice(from, 1);
+    newImages.splice(to, 0, moved);
+    onUpdate({ ...uni, assets: { ...uni.assets, images: newImages } });
   };
 
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setPdfFile(e.target.files[0]);
-      setHasPdf(true);
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      onUpdate({
+        ...uni,
+        assets: {
+          ...uni.assets,
+          pdf: { name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)}MB`, url: URL.createObjectURL(file) }
+        }
+      });
     }
   };
 
-  const handlePdfDownload = () => {
-    if (pdfFile) {
-      // Real download for user uploaded file
-      const url = URL.createObjectURL(pdfFile);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = pdfFile.name;
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (hasPdf) {
-      // Simulated download for initial state (creates a dummy PDF blob)
-      const blob = new Blob(["Simulated PDF Content for " + data.name], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${data.name}_2025_Proposal.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  const closePreview = () => {
+    setPreviewUrl(null);
+    setScale(1);
   };
 
   return (
-    <div className="h-full flex flex-col relative pb-6">
-      {previewImg && <ImagePreviewModal src={previewImg} onClose={() => setPreviewImg(null)} />}
-
-      <div className="flex items-center gap-6 mb-8 border-b border-neutral-800 pb-6">
-        <span className={`w-4 h-4 rounded-full ${data.themeColor}`}></span>
-        <h3 className="text-4xl font-bold text-white">方案资源库</h3>
-        <div className="h-px bg-neutral-800 flex-1 ml-4"></div>
-        <div className="text-lg text-neutral-400 font-mono">
-          Total Assets: <span className="text-white font-bold">{images.length}</span>
+    <div className="h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <h4 className="text-2xl font-black text-white flex items-center gap-3">
+          <Layers className="text-blue-500 w-7 h-7" /> 
+          视觉方案墙 <span className="bg-neutral-800 text-[10px] px-2 py-0.5 rounded-full text-neutral-400 ml-2 border border-neutral-700">{uni.abbr}</span>
+        </h4>
+        <div className="flex gap-4">
+          <label className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-black cursor-pointer flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+            <Plus className="w-5 h-5" /> 上传图片
+            <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+          </label>
+          <label className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-5 py-2.5 rounded-xl text-sm font-black cursor-pointer flex items-center gap-2 transition-all active:scale-95 border border-neutral-700 shadow-xl">
+            <FileText className="w-5 h-5" /> {uni.assets.pdf ? '更新 PDF' : '上传 PDF'}
+            <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} />
+          </label>
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-12 gap-10 min-h-0">
-        {/* Left: Image Wall (Interactive) */}
-        <div className="col-span-9 bg-neutral-900 rounded-3xl border border-neutral-800 flex flex-col p-8 relative overflow-hidden">
-           <div className="flex items-center justify-between mb-6">
-             <div className="flex items-center gap-3 text-lg text-white font-bold">
-               <Layout className="w-5 h-5 text-blue-400" /> 视觉方案展示 (Visual Deliverables)
-             </div>
-             <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-sm px-5 py-2 rounded-full flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20">
-               <Plus className="w-4 h-4" /> 上传新素材
-               <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-             </label>
-           </div>
-           
-           {images.length === 0 ? (
-             <div className="flex-1 flex flex-col items-center justify-center text-neutral-600 border-2 border-dashed border-neutral-800 rounded-2xl">
-                <UploadCloud className="w-16 h-16 mb-4 opacity-50" />
-                <p className="text-lg">暂无视觉素材，请上传</p>
-             </div>
-           ) : (
-             <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-3 gap-6 auto-rows-[280px] pb-4">
-                {images.map((img, i) => (
-                  <div key={i} className="group relative rounded-2xl overflow-hidden bg-neutral-800 border border-neutral-700 transition-all hover:border-blue-500/50">
-                     <img 
-                        src={img.url} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
-                        alt="Asset"
-                      />
-                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-[2px]">
-                        <button onClick={() => setPreviewImg(img.url)} className="p-3 bg-neutral-900/90 rounded-full text-white hover:bg-blue-600 transition-colors shadow-xl transform translate-y-4 group-hover:translate-y-0 duration-300">
-                          <Eye className="w-6 h-6" />
-                        </button>
-                        <button onClick={() => handleDeleteImage(i)} className="p-3 bg-neutral-900/90 rounded-full text-white hover:bg-rose-600 transition-colors shadow-xl transform translate-y-4 group-hover:translate-y-0 duration-300 delay-75">
-                          <Trash2 className="w-6 h-6" />
-                        </button>
-                     </div>
-                     <span className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 text-sm text-white font-medium truncate pt-10">
-                       {img.label}
-                     </span>
-                  </div>
-                ))}
-             </div>
-           )}
-        </div>
-
-        {/* Right: Resources & Checklist */}
-        <div className="col-span-3 flex flex-col gap-8">
-           {/* Checklist */}
-           <div className="flex-1 bg-neutral-800/30 rounded-3xl p-8 border border-neutral-700 flex flex-col">
-             <h4 className="text-white font-bold mb-6 flex items-center gap-3 text-base uppercase tracking-wider">
-               <ListTodo className="w-5 h-5 text-emerald-400" /> 交付清单
-             </h4>
-             <ul className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-               {data.uploadConfig.recommendedImages.map((item, idx) => (
-                  <li key={idx} className="text-base text-neutral-300 flex items-start gap-3">
-                     <div className="w-2 h-2 rounded-full bg-neutral-600 mt-2 shrink-0"></div>
-                     <span className="leading-snug">{item}</span>
-                  </li>
-               ))}
-               <li className="text-base text-neutral-300 flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-neutral-600 mt-2 shrink-0"></div>
-                  <span>实证数据源文件 (Excel/CSV)</span>
-               </li>
-             </ul>
-           </div>
-
-           {/* PDF Manager */}
-           <div className="bg-neutral-800 rounded-3xl p-6 border border-neutral-700">
-              <div className="flex items-center justify-between mb-4">
-                 <div className="flex items-center gap-3">
-                    <FileText className="w-6 h-6 text-neutral-400" />
-                    <span className="text-white font-bold text-lg">方案文档 PDF</span>
-                 </div>
-              </div>
-              
-              {hasPdf ? (
-                 <div className="bg-neutral-900 rounded-2xl p-4 border border-neutral-800 mb-4 group relative hover:border-blue-500/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                       <div className="bg-rose-500/20 text-rose-400 p-3 rounded-xl shrink-0">
-                          <FileText className="w-8 h-8" />
-                       </div>
-                       <div className="overflow-hidden">
-                          <div className="text-base text-white font-bold truncate mb-1">
-                            {pdfFile ? pdfFile.name : `${data.name}_Proposal.pdf`}
-                          </div>
-                          <div className="text-sm text-neutral-500">{pdfFile ? (pdfFile.size/1024/1024).toFixed(2) + ' MB' : '12.4 MB • Latest'}</div>
-                       </div>
-                    </div>
-                    <button 
-                      onClick={handlePdfDownload}
-                      className="absolute top-4 right-4 p-2 bg-neutral-800 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
-                      title="下载文档"
-                    >
-                       <Download className="w-5 h-5" />
-                    </button>
-                 </div>
-              ) : (
-                 <div className="bg-neutral-900/50 rounded-2xl p-8 border-2 border-dashed border-neutral-700 mb-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-sm text-neutral-500 mb-1">暂无文档</span>
-                 </div>
-              )}
-
-              <label className="flex items-center justify-center w-full gap-3 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold py-4 rounded-2xl transition-all cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]">
-                 <UploadCloud className="w-5 h-5" />
-                 <span>{hasPdf ? '替换 PDF 文档' : '上传 PDF 文档'}</span>
-                 <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
-              </label>
-           </div>
-        </div>
+      <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-3 gap-6 pb-6 pr-2">
+        {uni.assets.images.map((img, i) => (
+          <div 
+            key={i} 
+            className="group relative aspect-video bg-neutral-900 rounded-3xl overflow-hidden border border-neutral-800 shadow-2xl"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', i.toString())}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              const from = parseInt(e.dataTransfer.getData('text/plain'));
+              moveImage(from, i);
+            }}
+          >
+            <img src={img.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+              <button onClick={() => setPreviewUrl(img.url)} className="p-3 bg-blue-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Maximize className="w-5 h-5" /></button>
+              <button onClick={() => removeImage(i)} className="p-3 bg-rose-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Trash2 className="w-5 h-5" /></button>
+              <div className="cursor-move p-3 bg-neutral-700 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><GripVertical className="w-5 h-5" /></div>
+            </div>
+            <div className="absolute bottom-4 left-4 bg-neutral-900/90 backdrop-blur-xl px-3 py-1.5 rounded-xl text-xs text-neutral-200 font-mono border border-white/5">
+              #{i+1} {img.label.slice(0, 20)}
+            </div>
+          </div>
+        ))}
+        {uni.assets.images.length === 0 && (
+          <div className="col-span-3 h-full min-h-[400px] border-2 border-dashed border-neutral-800 rounded-[3rem] flex flex-col items-center justify-center text-neutral-600">
+            <UploadCloud className="w-16 h-16 mb-4 opacity-10" />
+            <p className="text-xl font-light">暂无视觉资产，点击上方按钮上传</p>
+          </div>
+        )}
       </div>
+
+      {previewUrl && (
+        <div className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center animate-in fade-in zoom-in duration-300">
+          <div className="relative w-full h-full flex items-center justify-center p-20" onClick={closePreview}>
+            <div className="absolute top-10 right-10 flex gap-4 z-10" onClick={e => e.stopPropagation()}>
+               <button onClick={() => setScale(s => Math.min(s + 0.2, 5))} className="p-4 bg-neutral-800 rounded-2xl text-white hover:bg-neutral-700 transition-colors"><ZoomIn className="w-6 h-6"/></button>
+               <button onClick={() => setScale(s => Math.max(s - 0.2, 0.5))} className="p-4 bg-neutral-800 rounded-2xl text-white hover:bg-neutral-700 transition-colors"><ZoomOut className="w-6 h-6"/></button>
+               <button onClick={closePreview} className="p-4 bg-rose-600 rounded-2xl text-white hover:bg-rose-500 transition-colors"><X className="w-6 h-6"/></button>
+            </div>
+            <img 
+              src={previewUrl} 
+              className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] transition-transform duration-200" 
+              style={{ transform: `scale(${scale})` }}
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -559,107 +402,131 @@ const UniResourceScreen = ({ data }: { data: UniversityData }) => {
 // --- Main App ---
 
 const App = () => {
+  const [universities, setUniversities] = useState<UniversityData[]>(() => {
+    const saved = localStorage.getItem('im-motors-universities');
+    return saved ? JSON.parse(saved) : INITIAL_UNIVERSITIES;
+  });
+
+  const [totalBudget, setTotalBudget] = useState<number>(() => {
+    const saved = localStorage.getItem('im-motors-budget');
+    return saved ? Number(saved) : INITIAL_TOTAL_BUDGET;
+  });
+
+  const [timeline, setTimeline] = useState<TimelineNode[]>(() => {
+    const saved = localStorage.getItem('im-motors-timeline');
+    return saved ? JSON.parse(saved) : INITIAL_TIMELINE;
+  });
+
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatAutoPrompt, setChatAutoPrompt] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('im-motors-universities', JSON.stringify(universities));
+  }, [universities]);
+
+  useEffect(() => {
+    localStorage.setItem('im-motors-budget', totalBudget.toString());
+  }, [totalBudget]);
+
+  const updateUniversity = (newUni: UniversityData) => {
+    setUniversities(prev => prev.map(u => u.id === newUni.id ? newUni : u));
+  };
+
+  const enterpriseAmount = Math.round(totalBudget * (ENTERPRISE_PERCENT / 100));
+  const governmentAmount = totalBudget - enterpriseAmount;
+
   return (
     <div className="snap-container no-scrollbar bg-[#050505] font-sans selection:bg-blue-500/30 text-neutral-100">
-      <Navigation />
-      <SchoolSidebar />
+      <Navigation universities={universities} />
+      <SchoolSidebar universities={universities} />
       
       {/* 1. Overview */}
       <SectionContainer id="overview" className="bg-gradient-to-br from-neutral-900 via-[#050505] to-[#0a0a0a]">
-        <div className="relative z-10 max-w-7xl mx-auto text-center flex flex-col items-center justify-center h-full">
-          <div className="inline-flex items-center gap-3 px-6 py-2.5 mb-10 border border-blue-500/30 rounded-full bg-blue-900/10 backdrop-blur-md shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-            <span className="relative flex h-3 w-3">
+        <div className="relative z-10 max-w-[1400px] mx-auto text-center flex flex-col items-center justify-center h-full">
+          <div className="inline-flex items-center gap-4 px-8 py-3 mb-10 border border-blue-500/30 rounded-full bg-blue-900/10 backdrop-blur-md">
+            <span className="relative flex h-4 w-4">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500"></span>
             </span>
-            <span className="text-blue-400 text-sm tracking-[0.2em] font-mono uppercase font-bold">Confidential Report</span>
+            <span className="text-blue-400 text-lg tracking-[0.3em] font-mono uppercase font-black">Internal / 2025~2026 Strategy Analysis</span>
           </div>
-          <h1 className="text-7xl md:text-[10rem] font-bold tracking-tighter text-white mb-6 leading-none select-none">
-            共创<span className="text-neutral-700 mx-6 font-light">/</span>未来
+          <h1 className="text-[6rem] md:text-[8rem] font-bold tracking-tighter text-white mb-8 leading-none select-none">
+            智己<span className="text-neutral-700 mx-10 font-thin">/</span>共创
           </h1>
-          <div className="text-4xl md:text-6xl font-light text-neutral-300 mb-20 tracking-tight">
-            L3+AI 人机共驾<span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-violet-400 to-emerald-400 mx-4">自然交互</span>创新方案
+          <div className="text-3xl md:text-5xl font-light text-neutral-300 mb-20 tracking-tight">
+            2025~2026 校企共创方案<span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-violet-400 to-emerald-400 mx-6">深度分析报告</span>
           </div>
           
-          <div className="grid grid-cols-4 gap-20 w-full max-w-5xl border-t border-neutral-800 pt-16">
+          <div className="grid grid-cols-4 gap-16 w-full max-w-6xl border-t border-neutral-800 pt-16">
             {[
-              { label: '参与高校', val: '4', unit: '所' },
-              { label: '拟立项', val: '3', unit: '项' },
-              { label: '总资金池', val: '30', unit: '万' },
-              { label: '研发周期', val: '18', unit: '月' }
+              { label: '入围高校', val: universities.length, unit: '所' },
+              { label: '核心指标', val: '12', unit: '项' },
+              { label: '预算池', val: (totalBudget / 10000).toFixed(0), unit: '万' },
+              { label: '项目周期', val: '18', unit: '月' }
             ].map((stat, i) => (
-              <div key={i} className="text-center group cursor-default">
-                <div className="text-6xl font-bold text-white mb-3 group-hover:text-blue-400 transition-colors">
+              <div key={i} className="text-center group scale-125">
+                <div className="text-6xl font-black text-white mb-4 group-hover:text-blue-400 transition-colors">
                   {stat.val}<span className="text-2xl ml-2 text-neutral-600 font-normal">{stat.unit}</span>
                 </div>
-                <div className="text-sm text-neutral-500 font-bold uppercase tracking-[0.2em]">{stat.label}</div>
+                <div className="text-sm text-neutral-500 font-black uppercase tracking-[0.3em]">{stat.label}</div>
               </div>
             ))}
-          </div>
-          
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce text-neutral-600">
-            <ChevronDown className="w-8 h-8" />
           </div>
         </div>
       </SectionContainer>
 
       {/* 2. Background */}
       <SectionContainer id="background">
-        <div className="h-full flex flex-col justify-center py-10">
-          <h2 className="text-6xl font-bold mb-12 text-white">
-            <span className="text-blue-500 mr-6 font-mono">01.</span>
-            项目背景与痛点
+        <div className="h-full flex flex-col justify-center max-h-[90vh]">
+          <h2 className="text-5xl font-bold mb-10 text-white flex items-center gap-6">
+            <span className="text-blue-500 font-mono text-3xl border-b-4 border-blue-500 pb-2">01.</span>
+            项目背景与现有技术基座
           </h2>
-          
-          {/* Top: Pain Points & Requirements */}
-          <div className="grid grid-cols-2 gap-16 mb-12 flex-1">
-             <div className="bg-neutral-900 p-12 rounded-[2.5rem] border border-neutral-800 flex flex-col justify-center hover:border-blue-500/30 transition-colors shadow-2xl">
-                <div className="mb-8 bg-rose-500/10 w-20 h-20 rounded-3xl flex items-center justify-center">
-                  <AlertCircle className="text-rose-500 w-10 h-10" />
+          <div className="grid grid-cols-12 gap-8 items-stretch flex-1 overflow-hidden">
+             <div className="col-span-5 flex flex-col gap-6">
+                <div className="bg-neutral-900/60 p-10 rounded-[2.5rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-rose-500/50 transition-all flex-1">
+                  <AlertCircle className="text-rose-500 w-12 h-12 mb-6" />
+                  <h3 className="text-3xl font-black text-white mb-4">核心痛点</h3>
+                  <p className="text-neutral-400 text-2xl leading-relaxed font-light">
+                    L3级自动驾驶中，线控转向失去物理连接，导致“数字路感”缺失，驾驶员面临<HighlightText>强烈的操控心理脱节与信任隔阂</HighlightText>。
+                  </p>
                 </div>
-                <h3 className="text-4xl font-bold text-white mb-6">核心体验断层</h3>
-                <p className="text-neutral-400 text-2xl leading-relaxed">
-                  L3级自动驾驶落地后，线控转向的<strong className="text-white border-b-2 border-rose-500/50">物理反馈缺失</strong>与数字交互逻辑形成割裂。
-                  驾驶员在“脱手”与“接管”切换时，缺乏足够的信心支撑。
-                </p>
-             </div>
-             <div className="bg-neutral-900 p-12 rounded-[2.5rem] border border-neutral-800 flex flex-col justify-center hover:border-emerald-500/30 transition-colors shadow-2xl">
-                <div className="mb-8 bg-emerald-500/10 w-20 h-20 rounded-3xl flex items-center justify-center">
-                  <FileCheck className="text-emerald-500 w-10 h-10" />
+                <div className="bg-neutral-900/60 p-10 rounded-[2.5rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-emerald-500/50 transition-all flex-1">
+                  <ShieldCheck className="text-emerald-500 w-12 h-12 mb-6" />
+                  <h3 className="text-3xl font-black text-white mb-4">合规要求</h3>
+                  <p className="text-neutral-400 text-2xl leading-relaxed font-light">
+                    <HighlightText>需满足国家自然科学基金基础研究深度</HighlightText>，并适配智己量产车型交付规范。
+                  </p>
                 </div>
-                <h3 className="text-4xl font-bold text-white mb-6">自然基金实施要求</h3>
-                <p className="text-neutral-400 text-2xl leading-relaxed">
-                  必须契合“基础学科支撑+技术创新”双重导向。
-                  方案需提供扎实的<strong className="text-white border-b-2 border-emerald-500/50">基础理论</strong>（心理学、人因工程）及<strong className="text-white border-b-2 border-emerald-500/50">可量化的实证数据</strong>。
-                </p>
              </div>
-          </div>
 
-          {/* Bottom: Technical Foundation */}
-          <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-700 rounded-3xl p-10 shadow-2xl">
-             <div className="flex items-center gap-4 mb-8 text-neutral-400 text-sm font-bold uppercase tracking-[0.2em] border-b border-neutral-700 pb-4">
-               <Layers className="w-5 h-5 text-blue-500" /> 现有技术基座支撑 (Technical Foundation)
-             </div>
-             <div className="grid grid-cols-3 gap-12">
-                <div className="flex items-center gap-6 group">
-                   <div className="w-16 h-16 rounded-2xl bg-neutral-950 flex items-center justify-center border border-neutral-800 group-hover:border-blue-500/50 transition-colors"><Zap className="w-8 h-8 text-blue-400"/></div>
-                   <div>
-                     <div className="text-2xl text-white font-bold mb-1">恒星超级增程</div>
-                     <div className="text-lg text-neutral-500">动力架构</div>
+             <div className="col-span-7 bg-gradient-to-br from-blue-900/20 to-neutral-900/40 p-12 rounded-[4rem] border border-blue-500/30 flex flex-col shadow-2xl relative overflow-hidden group">
+                <Cpu className="absolute -right-10 -bottom-10 opacity-10 w-96 h-96 text-blue-400 group-hover:scale-110 transition-transform" />
+                <div className="flex items-center gap-6 mb-12">
+                   <div className="bg-blue-600 p-5 rounded-3xl">
+                      <Binary className="text-white w-12 h-12" />
                    </div>
+                   <h3 className="text-5xl font-black text-blue-400 tracking-tight">现有技术基座支撑</h3>
                 </div>
-                <div className="flex items-center gap-6 border-l border-neutral-700 pl-12 group">
-                   <div className="w-16 h-16 rounded-2xl bg-neutral-950 flex items-center justify-center border border-neutral-800 group-hover:border-violet-500/50 transition-colors"><Activity className="w-8 h-8 text-violet-400"/></div>
-                   <div>
-                     <div className="text-2xl text-white font-bold mb-1">灵犀数字底盘 2.0</div>
-                     <div className="text-lg text-neutral-500">线控转向</div>
+                <div className="space-y-12 relative z-10 flex-1">
+                   <div className="grid grid-cols-1 gap-10">
+                      <div className="flex items-center gap-6 text-white text-3xl font-black">
+                         <Zap className="w-8 h-8 text-blue-400" /> 恒星超级增程 <span className="text-neutral-500 font-normal text-xl">（动力架构）</span>
+                      </div>
+                      <div className="flex items-center gap-6 text-white text-3xl font-black">
+                         <Layers className="w-8 h-8 text-blue-400" /> 灵蜥数字底盘 3.0 <span className="text-neutral-500 font-normal text-xl">（线控制动）</span>
+                      </div>
+                      <div className="flex items-center gap-6 text-white text-3xl font-black">
+                         <Monitor className="w-8 h-8 text-blue-400" /> AIOS 座舱系统 <span className="text-neutral-500 font-normal text-xl">（交互中枢）</span>
+                      </div>
                    </div>
-                </div>
-                <div className="flex items-center gap-6 border-l border-neutral-700 pl-12 group">
-                   <div className="w-16 h-16 rounded-2xl bg-neutral-950 flex items-center justify-center border border-neutral-800 group-hover:border-emerald-500/50 transition-colors"><Maximize2 className="w-8 h-8 text-emerald-400"/></div>
-                   <div>
-                     <div className="text-2xl text-white font-bold mb-1">AIOS 座舱系统</div>
-                     <div className="text-lg text-neutral-500">交互中枢</div>
+                   <div className="pt-12 border-t border-neutral-800 mt-6">
+                      <h4 className="flex items-center gap-4 text-emerald-400 text-3xl font-black mb-4">
+                        <Monitor className="w-10 h-10" /> 基于智舱AIOS屏幕布局研究
+                      </h4>
+                      <p className="text-neutral-400 text-2xl leading-relaxed font-light">
+                        针对智己汽车LS6和LS9的双屏布局进行适配，确保交付物具备较高可落地性。
+                      </p>
                    </div>
                 </div>
              </div>
@@ -667,233 +534,393 @@ const App = () => {
         </div>
       </SectionContainer>
 
-      {/* 3. Financials - Fixed Overflow & Layout */}
+      {/* 3. Finance & Timeline */}
       <SectionContainer id="finance">
-        <div className="w-full h-full flex flex-col justify-center max-h-screen">
-          <div className="flex items-center justify-between mb-8 border-b border-neutral-800 pb-4 shrink-0">
+        <div className="h-full flex flex-col justify-center max-h-[90vh]">
+          <div className="flex items-center justify-between mb-10 border-b border-neutral-800 pb-6">
             <h2 className="text-5xl font-bold text-white flex items-center gap-6">
-              <span className="text-emerald-500 mr-2 font-mono">02.</span>
-              金融方案
+              <span className="text-emerald-500 mr-2 font-mono text-3xl">02.</span>
+              金融方案与执行周期
             </h2>
-            <div className="text-right">
-              <div className="text-sm text-neutral-500 uppercase tracking-widest font-medium mb-1">Project Budget</div>
-              <div className="text-6xl font-mono font-bold text-emerald-400 tracking-tight">¥300,000</div>
+            <div className="text-right flex items-center gap-6">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-widest mb-1">Total Project Budget (Editable)</span>
+                <div className="flex items-center gap-3 bg-neutral-900 border border-neutral-700 rounded-2xl px-4 py-2 hover:border-emerald-500 transition-all shadow-inner">
+                  <Edit3 className="w-4 h-4 text-neutral-500" />
+                  <input 
+                    type="number" 
+                    value={totalBudget} 
+                    onChange={e => setTotalBudget(Number(e.target.value))}
+                    className="bg-transparent border-none text-emerald-400 font-mono text-3xl font-black outline-none w-48 text-right"
+                  />
+                  <span className="text-emerald-900 font-bold ml-1">¥</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 flex-1 min-h-0">
-            {/* Chart Area */}
-            <div className="flex flex-col justify-center h-full">
-              <div className="bg-neutral-900 rounded-[2.5rem] p-8 border border-neutral-800 relative shadow-2xl h-full flex flex-col justify-center">
-                 <div className="absolute -top-4 left-10 bg-neutral-800 px-4 py-2 text-sm text-neutral-400 rounded-lg border border-neutral-700 uppercase tracking-wider font-bold">资金结构</div>
-                 <div className="flex gap-2 h-32 mb-10 mt-4">
-                    <div className="h-full bg-blue-600 rounded-l-2xl flex flex-col justify-center items-center relative group transition-all hover:bg-blue-500" style={{width: '76.9%'}}>
-                       <span className="text-5xl font-bold text-white mb-2">76.9%</span>
-                       <span className="text-sm text-blue-200 uppercase font-bold tracking-widest">Enterprise</span>
+          <div className="grid grid-cols-2 gap-10 flex-1 overflow-hidden">
+            <div className="bg-neutral-900/50 rounded-[3rem] p-12 border border-neutral-800 flex flex-col justify-center shadow-2xl h-full">
+                 <h3 className="text-3xl font-black text-neutral-300 mb-10 uppercase tracking-widest flex items-center gap-4">
+                   <Layers className="w-8 h-8 text-blue-500"/> 资金分摊模型
+                 </h3>
+                 <div className="flex gap-3 h-24 mb-12">
+                    <div className="h-full bg-blue-600 rounded-l-[1.5rem] flex flex-col items-center justify-center shadow-lg shadow-blue-900/20" style={{width: `${ENTERPRISE_PERCENT}%`}}>
+                       <span className="text-3xl font-black text-white">{ENTERPRISE_PERCENT.toFixed(2)}%</span>
+                       <span className="text-[10px] text-white/70 font-bold">企业自筹资金</span>
                     </div>
-                    <div className="h-full bg-emerald-500 rounded-r-2xl flex flex-col justify-center items-center relative group transition-all hover:bg-emerald-400" style={{width: '23.1%'}}>
-                       <span className="text-5xl font-bold text-neutral-900 mb-2">23.1%</span>
-                       <span className="text-sm text-emerald-900 uppercase font-bold tracking-widest">Gov</span>
+                    <div className="h-full bg-emerald-500 rounded-r-[1.5rem] flex flex-col items-center justify-center shadow-lg shadow-emerald-900/20" style={{width: `${GOVERNMENT_PERCENT}%`}}>
+                       <span className="text-3xl font-black text-neutral-900">{GOVERNMENT_PERCENT.toFixed(2)}%</span>
+                       <span className="text-[10px] text-neutral-900/70 font-bold">政府专项补贴</span>
                     </div>
                  </div>
-                 
-                 <div className="space-y-4">
-                    {FINANCIAL_DATA.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-5 rounded-2xl bg-neutral-950 border border-neutral-800">
-                        <div className="flex items-center gap-4">
-                           <div className={`w-4 h-4 rounded-full ${i===0 ? 'bg-blue-500' : 'bg-emerald-500'}`}></div>
-                           <span className="text-neutral-300 font-bold text-xl">{item.label}</span>
-                        </div>
-                        <div className="text-right">
-                           <div className="text-white font-mono text-xl font-bold">¥{item.amount.toLocaleString()}</div>
-                           <div className="text-sm text-neutral-500 mt-1">{item.desc}</div>
+                 <div className="space-y-6">
+                    <div className="flex items-center justify-between p-8 rounded-[2rem] bg-neutral-950 border border-neutral-800 group transition-all hover:bg-neutral-900">
+                        <span className="text-neutral-400 font-black text-xl tracking-wider">智己汽车预算投入</span>
+                        <div className="text-blue-400 font-mono text-4xl font-black tracking-tighter">¥{enterpriseAmount.toLocaleString()}</div>
+                    </div>
+                    <div className="flex items-center justify-between p-8 rounded-[2rem] bg-neutral-950 border border-neutral-800 group transition-all hover:bg-neutral-900">
+                        <span className="text-neutral-400 font-black text-xl tracking-wider">自然基金专项配额</span>
+                        <div className="text-emerald-400 font-mono text-4xl font-black tracking-tighter">¥{governmentAmount.toLocaleString()}</div>
+                    </div>
+                 </div>
+            </div>
+
+            <div className="bg-neutral-900/50 rounded-[3rem] p-12 border border-neutral-800 flex flex-col shadow-2xl overflow-hidden h-full">
+              <h3 className="text-3xl font-black text-neutral-300 uppercase tracking-widest flex items-center gap-5 mb-8">
+                <BarChart className="w-8 h-8 text-neutral-500" /> 执行计划
+              </h3>
+              <div className="relative border-l-4 border-neutral-800 ml-5 space-y-8 pl-12 py-4 flex-1 overflow-y-auto no-scrollbar">
+                {timeline.map((node, idx) => (
+                  <div key={node.id} className="relative group">
+                    <div className={`absolute -left-[66px] top-1 w-6 h-6 rounded-full ${node.color} border-4 border-neutral-900 shadow-xl`}></div>
+                    <div className="flex items-center gap-4 mb-1">
+                      <span className="text-sm font-mono text-neutral-500 font-black">{node.date}</span>
+                      {idx === 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-black uppercase">
+                          <Clock className="w-3 h-3"/> Process Delay (Pending Review)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-3xl text-white font-black mb-2 tracking-tight">{node.title}</div>
+                    <div className="text-neutral-400 text-xl leading-relaxed font-light">{node.description}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </SectionContainer>
+
+      {/* 4. Deep Analysis */}
+      <div id="schools">
+        {universities.map((uni) => (
+          <React.Fragment key={uni.id}>
+            <SectionContainer id={`${uni.id}-content`} className="bg-[#050505]">
+              <div className="h-full flex flex-row gap-12 pb-10 max-h-[90vh]">
+                <div className="w-[32%] flex flex-col h-full py-4 border-r border-neutral-800/80 pr-10">
+                  <div className="mb-12">
+                    <div className="flex items-center gap-8 mb-10">
+                      <div className={`w-24 h-24 rounded-[2rem] ${uni.themeColor} text-white text-6xl font-black flex items-center justify-center shadow-2xl shadow-black/50`}>
+                        {uni.logoLetter}
+                      </div>
+                      <div>
+                        <h2 className="text-6xl font-black text-white tracking-tighter leading-none">{uni.name}</h2>
+                        <div className="text-neutral-500 font-mono text-sm uppercase tracking-[0.5em] mt-4 flex items-center gap-3">
+                           <span className="w-2 h-2 rounded-full bg-blue-500"></span> {uni.abbr} ANALYTICS
                         </div>
                       </div>
-                    ))}
-                 </div>
-              </div>
-            </div>
+                    </div>
+                  </div>
 
-            {/* Timeline Area */}
-            <div className="bg-neutral-900 rounded-[2.5rem] p-8 border border-neutral-800 flex flex-col shadow-2xl h-full overflow-hidden">
-              <h3 className="text-2xl font-bold text-neutral-300 mb-8 flex items-center gap-4 uppercase tracking-wider">
-                <BarChart className="w-6 h-6 text-neutral-500" />
-                执行时间轴 <span className="text-xs ml-4 bg-neutral-800 px-3 py-1.5 rounded-lg text-neutral-500 font-bold border border-neutral-700">(原计划)</span>
-              </h3>
-              <div className="relative border-l-4 border-neutral-800 ml-4 space-y-10 pl-10 py-4 flex-1 flex flex-col justify-center">
-                <div className="relative group">
-                  <div className="absolute -left-[54px] w-6 h-6 rounded-full bg-neutral-700 border-4 border-neutral-900 group-hover:bg-white transition-colors"></div>
-                  <div className="text-base font-mono text-neutral-500 mb-1 font-bold">2025.12 - 2026.01</div>
-                  <div className="text-2xl text-white font-bold mb-1">立项申报</div>
-                  <div className="text-neutral-400 text-lg">完成合同签订与入库流程</div>
+                  <div className="flex-1"></div>
+
+                  <div className="bg-gradient-to-br from-blue-600/20 via-violet-600/10 to-transparent border border-blue-500/30 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl">
+                    <Sparkles className="absolute -top-10 -right-10 w-48 h-48 text-blue-500/10" />
+                    <h4 className="text-blue-400 font-black mb-6 text-sm uppercase tracking-[0.4em] flex items-center gap-3">
+                       <Sparkles className="w-5 h-5" /> AI 综合深度评价
+                    </h4>
+                    <p className="text-3xl text-neutral-100 leading-[1.4] italic font-light">
+                       “{uni.summary}”
+                    </p>
+                  </div>
                 </div>
-                <div className="relative group">
-                  <div className="absolute -left-[54px] w-6 h-6 rounded-full bg-blue-500 border-4 border-neutral-900 group-hover:scale-110 transition-transform shadow-[0_0_20px_rgba(59,130,246,0.6)]"></div>
-                  <div className="text-base font-mono text-blue-400 mb-1 font-bold">2026.03 [启动]</div>
-                  <div className="text-2xl text-white font-bold mb-1">首款拨付</div>
-                  <div className="text-neutral-400 text-lg">总计15万 (5万/校) 启动资金到位</div>
-                </div>
-                <div className="relative group">
-                  <div className="absolute -left-[54px] w-6 h-6 rounded-full bg-emerald-500 border-4 border-neutral-900 group-hover:scale-110 transition-transform"></div>
-                  <div className="text-base font-mono text-emerald-400 mb-1 font-bold">2026.05 [验收]</div>
-                  <div className="text-2xl text-white font-bold mb-1">结题验收</div>
-                  <div className="text-neutral-400 text-lg">产出物审核，拨付尾款15万</div>
-                </div>
-                <div className="relative group">
-                  <div className="absolute -left-[54px] w-6 h-6 rounded-full bg-violet-500 border-4 border-neutral-900 group-hover:scale-110 transition-transform"></div>
-                  <div className="text-base font-mono text-violet-400 mb-1 font-bold">2027.06 [验证]</div>
-                  <div className="text-2xl text-white font-bold mb-1">实车验证</div>
-                  <div className="text-neutral-400 text-lg">量产车型搭载与用户体验闭环</div>
+
+                <div className="flex-1 flex flex-col gap-10 py-4 overflow-hidden">
+                   <div className="flex-[1.5] grid grid-cols-2 gap-10 overflow-hidden">
+                      {/* Synchronized styling for Concept and Logic */}
+                      <div className="bg-neutral-900/40 p-12 rounded-[3.5rem] border border-neutral-800 shadow-xl flex flex-col relative group overflow-hidden border-t-blue-500/50 border-t-4">
+                         <div className="flex items-center gap-5 mb-8 text-blue-400">
+                            <Layout className="w-9 h-9" />
+                            <h4 className="text-3xl font-black text-white uppercase tracking-wider">核心创意概念</h4>
+                         </div>
+                         <div className="text-neutral-100 text-2xl leading-[1.5] font-bold overflow-y-auto no-scrollbar pr-4">
+                           {uni.concept}
+                         </div>
+                      </div>
+
+                      <div className="bg-neutral-900/40 p-12 rounded-[3.5rem] border border-neutral-800 shadow-xl flex flex-col relative group overflow-hidden border-t-violet-500/50 border-t-4">
+                         <div className="flex items-center gap-5 mb-8 text-violet-400">
+                            <Compass className="w-9 h-9" />
+                            <h4 className="text-3xl font-black text-white uppercase tracking-wider">方案设计逻辑</h4>
+                         </div>
+                         <div className="text-neutral-100 text-2xl leading-[1.5] font-bold overflow-y-auto no-scrollbar pr-4">
+                            {uni.extracts[1]?.replace('设计思路：', '')}
+                         </div>
+                      </div>
+                   </div>
+
+                   <div className="flex-1 grid grid-cols-4 gap-6">
+                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-8 flex flex-col shadow-lg">
+                         <h5 className="text-blue-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Trello className="w-6 h-6" /> 实施规划</h5>
+                         <ul className="space-y-2 overflow-y-auto no-scrollbar">
+                           {uni.extracts[2]?.replace('方案规划：', '').split('。').filter(Boolean).map((p, i) => (
+                             <li key={i} className="text-white text-lg font-black leading-tight flex gap-2"><span className="text-blue-500 shrink-0">•</span>{p}</li>
+                           ))}
+                         </ul>
+                      </div>
+                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-8 flex flex-col shadow-lg">
+                         <h5 className="text-violet-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Award className="w-6 h-6" /> 团队资质</h5>
+                         <ul className="space-y-2 overflow-y-auto no-scrollbar">
+                           {uni.extracts[3]?.replace('实施计划：', '').replace('团队资质：', '').split('。').filter(Boolean).map((p, i) => (
+                             <li key={i} className="text-white text-lg font-black leading-tight flex gap-2"><span className="text-violet-500 shrink-0">•</span>{p}</li>
+                           ))}
+                         </ul>
+                      </div>
+                      <div className="bg-emerald-500/10 rounded-[2.5rem] border border-emerald-500/30 p-8 flex flex-col shadow-lg">
+                         <h5 className="text-emerald-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><CheckCircle2 className="w-6 h-6" /> 优势</h5>
+                         <ul className="space-y-3 overflow-y-auto no-scrollbar">
+                           {uni.pros.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-emerald-500 shrink-0">•</span>{p}</li>)}
+                         </ul>
+                      </div>
+                      <div className="bg-rose-500/10 rounded-[2.5rem] border border-rose-500/30 p-8 flex flex-col shadow-lg">
+                         <h5 className="text-rose-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><AlertCircle className="w-6 h-6" /> 劣势</h5>
+                         <ul className="space-y-3 overflow-y-auto no-scrollbar">
+                           {uni.cons.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-rose-500 shrink-0">•</span>{p}</li>)}
+                         </ul>
+                      </div>
+                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </SectionContainer>
-
-      {/* 4. Universities - 8 Screens (2 per uni) */}
-      <div id="schools">
-        {UNIVERSITIES.map((uni) => (
-          <React.Fragment key={uni.id}>
-            {/* Screen 1: Content */}
-            <SectionContainer id={`${uni.id}-content`} className="bg-[#050505] border-t border-neutral-900">
-              <UniContentScreen data={uni} />
             </SectionContainer>
-            {/* Screen 2: Resource */}
-            <SectionContainer id={`${uni.id}-resource`} className="bg-[#050505]">
-              <UniResourceScreen data={uni} />
+
+            {/* Page 2: Resource Gallery - Optimized for 16:9 compliance */}
+            <SectionContainer id={`${uni.id}-resource`} className="bg-[#050505] border-t border-neutral-900">
+              <div className="h-full flex flex-col pb-4 max-h-[90vh] overflow-hidden">
+                <div className="flex items-center gap-6 mb-4 border-b border-neutral-800 pb-4 shrink-0">
+                  <div className={`w-12 h-12 rounded-xl ${uni.themeColor} flex items-center justify-center text-white text-2xl font-black`}>{uni.logoLetter}</div>
+                  <h3 className="text-4xl font-black text-white">方案资产与附件库 <span className="text-neutral-600 font-light mx-4">/</span> <span className="text-blue-500">{uni.name}</span></h3>
+                  <div className="ml-auto">
+                    <span className="px-4 py-2 bg-neutral-800 rounded-xl text-xs font-black text-blue-400 border border-blue-500/20 uppercase tracking-widest">{uni.abbr} EXCLUSIVE</span>
+                  </div>
+                </div>
+
+                <div className="flex-1 grid grid-cols-12 gap-8 overflow-hidden">
+                  <div className="col-span-8 bg-neutral-900/20 rounded-[3rem] border border-neutral-800 p-8 flex flex-col overflow-hidden shadow-inner h-[80vh]">
+                    <ImageWall uni={uni} onUpdate={updateUniversity} />
+                  </div>
+                  
+                  <div className="col-span-4 flex flex-col gap-6 overflow-hidden h-[80vh]">
+                    <div className="bg-neutral-900 rounded-[2.5rem] p-8 border border-neutral-800 flex flex-col gap-6 shrink-0 shadow-2xl">
+                       {uni.assets.pdf ? (
+                         <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                              <div className="p-4 bg-rose-600/10 rounded-2xl text-rose-500"><FileText className="w-8 h-8"/></div>
+                              <div className="flex-1 min-w-0">
+                                 <p className="font-black text-white text-2xl truncate leading-none mb-1">{uni.assets.pdf.name}</p>
+                                 <p className="text-xs text-neutral-500 uppercase font-mono tracking-widest">PDF • {uni.assets.pdf.size}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <a href={uni.assets.pdf.url} target="_blank" className="flex items-center justify-center gap-2 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-2xl text-white font-black text-lg transition-all shadow-xl border border-neutral-700"><EyeIcon className="w-5 h-5"/> 预览</a>
+                              <a href={uni.assets.pdf.url} download className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black text-lg transition-all shadow-xl"><Download className="w-5 h-5"/> 下载</a>
+                            </div>
+                         </div>
+                       ) : (
+                         <label className="border-2 border-dashed border-neutral-800 rounded-[2rem] p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/40 transition-all">
+                            <FileText className="w-12 h-12 text-neutral-700 mb-2"/>
+                            <p className="text-neutral-500 text-xl font-black">上传方案 PDF</p>
+                            <input type="file" className="hidden" accept="application/pdf" onChange={e => {
+                              if (e.target.files?.[0]) {
+                                const f = e.target.files[0];
+                                updateUniversity({...uni, assets: {...uni.assets, pdf: {name: f.name, size: (f.size/1024/1024).toFixed(1)+'MB', url: URL.createObjectURL(f)}}});
+                              }
+                            }}/>
+                         </label>
+                       )}
+                    </div>
+
+                    {/* Fixed Dimension Matrix - Full visibility within 16:9 */}
+                    <div className="flex-1 bg-neutral-900/40 p-8 rounded-[3rem] border border-neutral-800 flex flex-col shadow-xl overflow-hidden relative">
+                       <h4 className="text-emerald-400 font-black mb-6 text-xl flex items-center gap-3">
+                         <Activity className="w-6 h-6" /> 核心维度解析
+                       </h4>
+                       <div className="space-y-4 overflow-y-auto no-scrollbar pr-1 pb-2">
+                          {uni.pros.map((p, i) => (
+                             <div key={i} className="flex gap-4 items-start bg-neutral-950/50 p-4 rounded-[1.5rem] border border-white/5">
+                                <CheckCircle2 className="w-6 h-6 text-emerald-500 mt-0.5 shrink-0" />
+                                <span className="text-white text-lg font-bold leading-tight">{p}</span>
+                             </div>
+                          ))}
+                          <div className="flex gap-4 items-start bg-neutral-950/50 p-5 rounded-[1.5rem] border border-white/5 border-l-blue-500">
+                             <TrendingUp className="w-6 h-6 text-blue-400 mt-0.5 shrink-0" />
+                             <span className="text-blue-100 text-lg font-bold leading-tight">{uni.summary}</span>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </SectionContainer>
           </React.Fragment>
         ))}
       </div>
 
-      {/* 5. Summary - Redesigned Split Layout */}
-      <SectionContainer id="summary" className="bg-[#0a0a0a]">
-        <div className="w-full flex flex-col h-full gap-6">
-          <h2 className="text-4xl font-bold text-center text-white tracking-tight shrink-0">方案核心维度横向对比与策略建议</h2>
+      {/* 5. Summary - Horizontal Benchmarking Matrix - Redesigned based on reference */}
+      <SectionContainer id="summary" className="bg-[#0a0a0a]" isLast={false}>
+        <div className="w-full flex flex-col h-full gap-8 py-4 overflow-hidden max-h-[90vh]">
+          <div className="flex items-center justify-between shrink-0 mb-2">
+             <div className="flex items-center gap-6">
+                <h2 className="text-5xl font-black text-white tracking-tighter uppercase">横向对比矩阵</h2>
+                <span className="text-neutral-500 uppercase tracking-[0.4em] text-sm font-mono font-bold mt-2">2025~2026 CO-CREATION STRATEGIC PRIORITY MATRIX</span>
+             </div>
+             <button onClick={() => { setChatAutoPrompt("针对智己AIOS，从这四个学校中选择3个进行组合，分别给出一份技术型和体验型的最优组合报告。"); setIsChatOpen(true); }} className="flex items-center gap-4 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-full font-black text-xl shadow-3xl transition-all hover:scale-105 shrink-0">
+               <Sparkles className="w-6 h-6" /> AI 决策咨询
+             </button>
+          </div>
           
-          {/* Comparison Table (Top) */}
-          <div className="bg-neutral-900 rounded-[2rem] border border-neutral-800 overflow-hidden shadow-2xl flex-[2] min-h-0">
-            <div className="overflow-auto h-full custom-scrollbar">
-              <table className="w-full text-left border-collapse">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-[2.5rem] overflow-hidden shrink-0 shadow-2xl flex-1 max-h-[85%]">
+             <table className="w-full text-left border-collapse h-full table-fixed">
                 <thead>
-                  <tr className="bg-neutral-950">
-                    <th className="p-6 text-neutral-500 font-bold w-64 text-lg uppercase tracking-wider border-b border-neutral-800 sticky top-0 bg-neutral-950 z-10">Evaluation</th>
-                    {UNIVERSITIES.map(u => (
-                      <th key={u.id} className="p-6 text-white border-l border-b border-neutral-800 relative group transition-colors hover:bg-neutral-900 sticky top-0 bg-neutral-950 z-10">
-                        <div className={`absolute top-0 left-0 w-full h-1 ${u.themeColor}`}></div>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg ${u.themeColor} flex items-center justify-center text-xs font-bold shadow-lg`}>{u.logoLetter}</div>
-                          <span className="text-xl font-bold">{u.name}</span>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
+                   <tr className="bg-neutral-800/50 text-neutral-400 text-sm font-black uppercase tracking-[0.2em] border-b border-neutral-700">
+                      <th className="p-3 w-[15%] text-center border-r border-neutral-700">评估维度</th>
+                      {universities.map(u => (
+                        <th key={u.id} className="p-3 border-r border-neutral-700 last:border-r-0 w-[21.25%]">
+                           <div className="flex items-center justify-center gap-4">
+                              <div className={`w-10 h-10 rounded-xl ${u.themeColor} flex items-center justify-center text-white text-xl font-black shadow-xl`}>{u.logoLetter}</div>
+                              <span className="text-white text-2xl font-black tracking-tighter truncate">{u.name}</span>
+                           </div>
+                        </th>
+                      ))}
+                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-800">
-                  <tr className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="p-6 text-neutral-400 font-bold text-xl">基础学科</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 font-medium">触觉感知、认知心理学</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 font-medium">航空人因工程、工效学</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 font-medium">脑电认知机制、心理声学</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 font-medium">情感计算</td>
-                  </tr>
-                  <tr className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="p-6 text-neutral-400 font-bold text-xl">核心痛点</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800">线控路感缺失</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800">接管安全边界模糊</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800">感官交互不精细</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800">人机信任与情感连接</td>
-                  </tr>
-                  <tr className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="p-6 text-neutral-400 font-bold text-xl">创新亮点</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 text-blue-300 font-medium">多模态融合、路感数字化</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 text-amber-300 font-medium">航空迁移、检查单流程</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800 text-emerald-300 font-medium">生理数据量化、声光规范</td>
-                    <td className="p-6 text-neutral-200 text-lg border-l border-neutral-800">人格化IP、全场景生态</td>
-                  </tr>
-                  <tr className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="p-6 text-neutral-400 font-bold text-xl">团队资质</td>
-                    <td className="p-6 text-neutral-300 border-l border-neutral-800 leading-relaxed text-base">设计+集成电路跨学科背景</td>
-                    <td className="p-6 text-neutral-300 border-l border-neutral-800 leading-relaxed text-base">C919驾驶舱设计经验</td>
-                    <td className="p-6 text-neutral-300 border-l border-neutral-800 leading-relaxed text-base">实验设备完备、量化严谨</td>
-                    <td className="p-6 text-neutral-300 border-l border-neutral-800 leading-relaxed text-base">跨界资源丰富、商业化强</td>
-                  </tr>
+                <tbody className="text-base font-bold">
+                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
+                        <div className="flex flex-col items-center gap-1">
+                          <Sparkles className="w-7 h-7 text-violet-500" />
+                          <span className="text-lg tracking-tighter">AI 综合评价</span>
+                        </div>
+                      </td>
+                      {universities.map(u => (
+                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 text-white text-xl font-bold leading-relaxed overflow-y-auto align-top">
+                          {u.summary}
+                        </td>
+                      ))}
+                   </tr>
+                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
+                        <div className="flex flex-col items-center gap-1">
+                          <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                          <span className="text-lg tracking-tighter">方案优势</span>
+                        </div>
+                      </td>
+                      {universities.map(u => (
+                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
+                           <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
+                             {u.pros.map((p, i) => (
+                               <div key={i} className="text-emerald-400 text-xl font-bold leading-tight flex gap-2">
+                                 <span className="shrink-0">•</span><span className="text-white">{p}</span>
+                               </div>
+                             ))}
+                           </div>
+                        </td>
+                      ))}
+                   </tr>
+                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
+                        <div className="flex flex-col items-center gap-1">
+                          <AlertCircle className="w-7 h-7 text-rose-500" />
+                          <span className="text-lg tracking-tighter">方案劣势</span>
+                        </div>
+                      </td>
+                      {universities.map(u => (
+                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
+                           <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
+                             {u.cons.map((c, i) => (
+                               <div key={i} className="text-rose-400 text-xl font-bold leading-tight flex gap-2">
+                                 <span className="shrink-0">•</span><span className="text-neutral-400">{c}</span>
+                               </div>
+                             ))}
+                           </div>
+                        </td>
+                      ))}
+                   </tr>
+                   <tr className="hover:bg-white/5 transition-colors h-[21%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
+                        <div className="flex flex-col items-center gap-1">
+                          <Users className="w-7 h-7 text-blue-500" />
+                          <span className="text-lg tracking-tighter">团队资质</span>
+                        </div>
+                      </td>
+                      {universities.map(u => (
+                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
+                           <div className="text-white text-xl font-bold leading-relaxed overflow-y-auto no-scrollbar h-full">
+                              {u.extracts[3]?.replace('实施计划：', '').replace('团队资质：', '')}
+                           </div>
+                        </td>
+                      ))}
+                   </tr>
                 </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Strategy Recommendation (Bottom) */}
-          <div className="grid grid-cols-2 gap-6 flex-1 min-h-[250px] shrink-0">
-             {/* Strategy A */}
-             <div className="bg-neutral-900 rounded-[2rem] border border-neutral-800 p-8 flex flex-col justify-center relative overflow-hidden group hover:border-blue-500/30 transition-all">
-                <div className="absolute top-0 right-0 p-4 opacity-5">
-                   <TrendingUp className="w-40 h-40 text-white" />
-                </div>
-                <div className="flex items-center gap-3 mb-4 z-10">
-                   <span className="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-sm font-bold border border-blue-500/20 tracking-wider">STRATEGY A</span>
-                   <h3 className="text-3xl font-bold text-white">科研壁垒组合</h3>
-                </div>
-                <p className="text-neutral-400 text-xl mb-8 z-10 leading-relaxed">侧重技术深度与实证严谨性，构建扎实的底层交互规范。</p>
-                <div className="flex items-center gap-6 z-10">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">S</div>
-                      <span className="text-lg text-neutral-300 font-bold">交大</span>
-                   </div>
-                   <div className="h-px w-8 bg-neutral-700"></div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">U</div>
-                      <span className="text-lg text-neutral-300 font-bold">上理</span>
-                   </div>
-                   <div className="h-px w-8 bg-neutral-700"></div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">E</div>
-                      <span className="text-lg text-neutral-300 font-bold">华理</span>
-                   </div>
-                </div>
-             </div>
-
-             {/* Strategy B */}
-             <div className="bg-neutral-900 rounded-[2rem] border border-neutral-800 p-8 flex flex-col justify-center relative overflow-hidden group hover:border-violet-500/30 transition-all">
-                 <div className="absolute top-0 right-0 p-4 opacity-5">
-                   <Award className="w-40 h-40 text-white" />
-                </div>
-                <div className="flex items-center gap-3 mb-4 z-10">
-                   <span className="px-3 py-1 bg-violet-500/10 text-violet-400 rounded-lg text-sm font-bold border border-violet-500/20 tracking-wider">STRATEGY B</span>
-                   <h3 className="text-3xl font-bold text-white">品牌声量组合</h3>
-                </div>
-                <p className="text-neutral-400 text-xl mb-8 z-10 leading-relaxed">侧重市场影响力与IP跨界，最大化营销传播价值与商业化潜力。</p>
-                 <div className="flex items-center gap-6 z-10">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">S</div>
-                      <span className="text-lg text-neutral-300 font-bold">交大</span>
-                   </div>
-                   <div className="h-px w-8 bg-neutral-700"></div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">U</div>
-                      <span className="text-lg text-neutral-300 font-bold">上理</span>
-                   </div>
-                   <div className="h-px w-8 bg-neutral-700"></div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">T</div>
-                      <span className="text-lg text-neutral-300 font-bold">清华</span>
-                   </div>
-                </div>
-             </div>
-          </div>
-          
-          <div className="text-center text-neutral-600 text-xs flex items-center justify-center gap-3 shrink-0 py-1">
-            <School className="w-4 h-4" />
-            <span>CONFIDENTIAL - INTERNAL USE ONLY</span>
-            <span className="mx-2 text-neutral-800">|</span>
-            <span>智舱软件 陈晓华</span>
+             </table>
           </div>
         </div>
       </SectionContainer>
 
-      {/* Gemini Widget */}
-      <GeminiChatWidget />
+      {/* 6. Summary - Recommendations */}
+      <SectionContainer id="recommendations" className="bg-[#050505]" isLast={true}>
+        <div className="w-full flex flex-col h-full gap-10 py-10 overflow-hidden max-h-[90vh]">
+          <div className="flex items-center justify-between shrink-0 mb-4">
+             <div>
+                <h2 className="text-6xl font-black text-white tracking-tighter mb-4 uppercase">组合建议</h2>
+                <p className="text-neutral-500 uppercase tracking-[0.5em] text-sm font-mono font-black">Strategic Portfolio Recommendations</p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-12 flex-1 pb-16">
+             <div className="bg-neutral-900/60 rounded-[4rem] border border-neutral-800 p-16 relative overflow-hidden group hover:border-blue-500/50 transition-all flex flex-col shadow-2xl">
+                <Target className="absolute -top-10 -right-10 opacity-[0.05] w-80 h-80 text-blue-500" />
+                <div className="flex items-center gap-6 mb-10">
+                   <div className="px-6 py-2 bg-blue-500/10 text-blue-400 rounded-full font-mono text-sm font-black border border-blue-500/20 uppercase tracking-[0.3em]">STRATEGY A • TECH DEPTH</div>
+                </div>
+                <h3 className="text-5xl font-black text-white tracking-tighter mb-8 leading-tight">底层科研实证型组合</h3>
+                <p className="text-neutral-400 text-3xl leading-relaxed font-light flex-1">
+                  推荐：<span className="text-white font-black underline decoration-blue-500 underline-offset-8">交大 + 上理工 + 华理</span>。
+                  聚焦<HighlightText>底座解耦算法</HighlightText>、<HighlightText>高安全范式</HighlightText>与<HighlightText>生理量化验证</HighlightText>。构建绝对的技术壁垒，适合高阶智驾与国家级课题申报。
+                </p>
+             </div>
+
+             <div className="bg-neutral-900/60 rounded-[4rem] border border-neutral-800 p-16 relative overflow-hidden group hover:border-violet-500/50 transition-all flex-1 flex flex-col shadow-2xl">
+                <Zap className="absolute -top-10 -right-10 opacity-[0.05] w-80 h-80 text-violet-500" />
+                <div className="flex items-center gap-6 mb-10">
+                   <div className="px-6 py-2 bg-violet-500/10 text-violet-400 rounded-full font-mono text-sm font-black border border-violet-500/20 uppercase tracking-[0.3em]">STRATEGY B • USER EXPERIENCE</div>
+                </div>
+                <h3 className="text-5xl font-black text-white tracking-tighter mb-8 leading-tight">品牌差异感知型组合</h3>
+                <p className="text-neutral-400 text-3xl leading-relaxed font-light flex-1">
+                  推荐：<span className="text-white font-black underline decoration-violet-500 underline-offset-8">清华 + 交大 + 上理工</span>。
+                  融合<HighlightText>情感体验IP</HighlightText>、<HighlightText>触觉信任模型</HighlightText>与<HighlightText>航空管理逻辑</HighlightText>。快速将硬核技术转化为用户可感知的量产卖点，塑造高端心智。
+                </p>
+             </div>
+          </div>
+        </div>
+      </SectionContainer>
+
+      <GeminiChatWidget 
+        isOpen={isChatOpen} 
+        setIsOpen={setIsChatOpen} 
+        autoPrompt={chatAutoPrompt}
+        universities={universities}
+      />
     </div>
   );
 };

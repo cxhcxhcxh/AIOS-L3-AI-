@@ -1,6 +1,8 @@
+
 export interface UniversityData {
   id: string;
   name: string;
+  abbr: string;
   themeColor: string;
   logoLetter: string;
   concept: string; // 50 words max
@@ -8,11 +10,26 @@ export interface UniversityData {
   pros: string[];
   cons: string[];
   summary: string;
-  // Resource/Upload Screen Data
-  uploadConfig: {
-    recommendedImages: string[];
-    hasDoc: boolean;
+  // Asset Data for Deployment
+  assets: {
+    images: Array<{
+      label: string;
+      url: string;
+    }>;
+    pdf?: {
+      name: string;
+      url?: string;
+      size: string;
+    };
   };
+}
+
+export interface TimelineNode {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  color: string;
 }
 
 export enum SectionType {

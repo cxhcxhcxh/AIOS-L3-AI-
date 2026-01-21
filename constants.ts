@@ -1,44 +1,47 @@
-import { UniversityData } from './types';
 
-export const UNIVERSITIES: UniversityData[] = [
+import { UniversityData, TimelineNode } from './types';
+
+export const INITIAL_UNIVERSITIES: UniversityData[] = [
   {
     id: 'sjtu',
     name: '上海交通大学',
+    abbr: 'SJTU',
     themeColor: 'bg-blue-600',
     logoLetter: 'S',
-    concept: '基于触觉感知算法与认知心理学，构建“Calm&Clear”智感座舱，解决线控转向路感缺失问题，打造无形信任与有感连接。',
+    concept: '基于触觉感知算法与认知心理学，构建“Calm&Clear”智感座舱，解决线控场景下智己AIOS的路感缺失问题，打造无形信任与有感连接。',
     extracts: [
       '创意概念：提出“C²智感座舱”框架，以“Calm&Clear”设计哲学，构建“无形信任、有感连接、有界安全”的移动空间新体验。',
       '设计思路：围绕模式切换（渐进式接管）、数字路感（多通道反馈）、情境空间（场景化模式）、多模态规范展开。',
       '方案规划：覆盖场景优化、屏幕布局（Zone A/B/C分级呈现）、多模态编码三大模块。',
-      '实施计划：需求澄清→原型设计→高保真开发→人因实证→集成优化。'
+      '团队资质：由交大心理实验室与自动化系联合构成，拥有多项触觉感知核心算法专利及智己L7前期联合研发经验。'
     ],
     pros: [
       '基础学科支撑扎实（触觉感知算法+认知心理学）。',
       '实证设计完善，明确被试规模与数据采集方法。',
-      '与智己线控技术、多屏生态适配度高，落地性强。'
+      '与智己线控技术、AIOS多屏生态适配度高，落地性强。'
     ],
     cons: [
       '研究范围较广，需聚焦核心技术的底层理论突破。',
       '多模态参数优化依赖大量实验数据，周期压力较大。'
     ],
     summary: '方案以触觉感知算法为核心基础学科支撑，聚焦线控场景的实际痛点，研究路径清晰，高度契合自然基金“基础研究+技术落地”的双要求。',
-    uploadConfig: {
-      recommendedImages: ['C²智感座舱意象图', '动态分级预警机制示意图', '数字路感可视化示意图', '分级驾驶视窗渗透示意图'],
-      hasDoc: true
+    assets: {
+      images: [],
+      pdf: undefined
     }
   },
   {
     id: 'usst',
     name: '上海理工大学',
+    abbr: 'USST',
     themeColor: 'bg-amber-600',
     logoLetter: 'U',
-    concept: '基于航空人因工程理论，借鉴民航自主飞行交互范式，构建“透明化、可信赖”的高可信度L3级人机共驾交互系统。',
+    concept: '基于航空人因工程理论，借鉴民航自主飞行交互范式，为智己AIOS构建“透明化、可信赖”的高可信度L3级人机共驾交互系统。',
     extracts: [
       '创意概念：借鉴民航人机协作范式，打造“透明化、可信赖、有陪伴感”的人车对话系统。',
       '设计思路：实现从“显示”到“呈现”、从“操作”到“管理”、从“告警”到“对话”的三大核心转变。',
       '方案规划：包含场景定义（飞行与驾驶对比）、技术迁移（A350紧急下降系统迁移）、交互范式构建三大模块。',
-      '团队资质：拥有C919驾驶舱触控化设计经验、5G救护车内饰布局研究经验。'
+      '团队资质：核心团队拥有C919大飞机驾驶舱触控化设计经验、5G救护车内饰布局研究经验，擅长高等级安全交互设计。'
     ],
     pros: [
       '基础学科特色鲜明（航空人因工程），技术迁移逻辑清晰。',
@@ -49,22 +52,23 @@ export const UNIVERSITIES: UniversityData[] = [
       '语音交互的底层算法依赖外部技术支持。'
     ],
     summary: '方案以航空人因工程为核心，技术迁移路径明确，聚焦安全与仪式感痛点，契合自然基金对“跨领域理论应用”的支持导向。',
-    uploadConfig: {
-      recommendedImages: ['航空技术迁移映射图', '电子检查单流程示意图', '驾驶员角色转型交互图', '多模态告警信号设计图'],
-      hasDoc: true
+    assets: {
+      images: [],
+      pdf: undefined
     }
   },
   {
     id: 'ecust',
     name: '华东理工大学',
+    abbr: 'ECUST',
     themeColor: 'bg-emerald-600',
     logoLetter: 'E',
-    concept: '基于脑电认知机制与心理声学理论，通过生理数据量化，建立L3座舱声光安全交互规范，实现精细化五感交互。',
+    concept: '基于脑电认知机制与心理声学理论，通过生理数据量化，为智己AIOS建立L3座舱声光安全交互规范，实现精细化五感交互。',
     extracts: [
       '创意概念：聚焦感官交互痛点，通过脑电(EEG)、眼动实验，构建基于生理数据的提示音与内饰灯光交互规范。',
       '设计思路：遵循“理论分析-用户需求-设计要素-原型-验证-迭代”闭环，基于认知神经科学与心理声学。',
       '方案规划：涵盖理论基础、感官要素提取、交互规范制定、原型开发四大模块。',
-      '案例附录：提示音频率-反应时关系曲线、夜间内饰灯光安全阈值评价体系。'
+      '团队资质：工业设计系与生命科学院交叉学科团队，配备高精度脑电仪及心理物理学实验场，具备极强的量化分析能力。'
     ],
     pros: [
       '基础学科聚焦度高（脑电认知+心理声学），实验设备完备。',
@@ -75,22 +79,23 @@ export const UNIVERSITIES: UniversityData[] = [
       '生理数据个体差异大，规范普适性需进一步验证。'
     ],
     summary: '方案以量化研究为核心，实验设计完善，完全契合自然基金“基础理论+实验验证”的核心要求，学术价值突出。',
-    uploadConfig: {
-      recommendedImages: ['EEG实验场景布置图', '提示音反应时曲线图', '夜间灯光安全阈值图', '生理数据分析图表'],
-      hasDoc: true
+    assets: {
+      images: [],
+      pdf: undefined
     }
   },
   {
     id: 'tsinghua',
     name: '清华大学',
+    abbr: 'THU',
     themeColor: 'bg-violet-600',
     logoLetter: 'T',
-    concept: '基于情感计算理论，打造人格化IP“小智”，构建车载+非车载全场景的情感化人机交互生态，解决信任隔阂。',
+    concept: '基于情感计算理论，为智己AIOS打造人格化IP“小智”，构建车载+非车载全场景的情感化人机交互生态，解决信任隔阂。',
     extracts: [
       '创意概念：以情感计算为核心，打造人格化IP，突破屏幕中心逻辑，建立强情感连接。',
       '设计思路：围绕IP人格化、交互场景化、服务生态化三大核心方向。',
       '方案规划：第一阶段（现有IP改良+规范）；第二阶段（原创IP设计+生态开发）。',
-      '团队资质：清华美院信息艺术设计系，QS排名全球第14，跨界资源丰富。'
+      '团队资质：清华美院信息艺术设计系背景，在情感机器人、虚拟生命IP化及跨模态语义理解领域拥有行业顶尖的研究成果。'
     ],
     pros: [
       '基础学科新颖（情感计算），契合未来趋势。',
@@ -101,14 +106,20 @@ export const UNIVERSITIES: UniversityData[] = [
       '落地依赖大量外部资源，情感交互效果难以量化。'
     ],
     summary: '方案创意性突出，场景覆盖全面，构建了完整的IP生态，但需强化基础理论支撑与实证设计以适配基金要求。',
-    uploadConfig: {
-      recommendedImages: ['“小智”IP视觉形象规范', '车载场景IP交互界面', '非车载应用示意图', 'IP动作/表情设计库'],
-      hasDoc: true
+    assets: {
+      images: [],
+      pdf: undefined
     }
   }
 ];
 
-export const FINANCIAL_DATA = [
-  { label: '智己汽车注资', amount: 230769, percent: 76.9, desc: '研究经费、原型开发、技术转化' },
-  { label: '政府自然基金', amount: 69231, percent: 23.1, desc: '基础学科研究、实验采集、学术交流' }
+export const INITIAL_TIMELINE: TimelineNode[] = [
+  { id: '1', date: '2025.12 - 2026.01', title: '立项申报', description: '完成合同签订与入库流程', color: 'bg-neutral-700' },
+  { id: '2', date: '2026.03 [启动]', title: '首款拨付', description: '总计15万 (5万/校) 启动资金到位', color: 'bg-blue-500' },
+  { id: '3', date: '2026.05 [验收]', title: '结题验收', description: '产出物审核，拨付尾款15万', color: 'bg-emerald-500' },
+  { id: '4', date: '2027.06 [验证]', title: '实车验证', description: '量产车型搭载与用户体验闭环', color: 'bg-violet-500' }
 ];
+
+export const INITIAL_TOTAL_BUDGET = 300000;
+export const ENTERPRISE_PERCENT = 76.923;
+export const GOVERNMENT_PERCENT = 23.077;
