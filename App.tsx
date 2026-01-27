@@ -566,7 +566,7 @@ const App = () => {
             {[
               { label: '入围高校', val: universities.length, unit: '所' },
               { label: '预算池', val: (totalBudget / 10000).toFixed(0), unit: '万' },
-              { label: '项目周期', val: '18', unit: '月' }
+              { label: '单项额度', val: '10', unit: '万每校' }
             ].map((stat, i) => (
               <div key={i} className="text-center group scale-125">
                 <div className="text-6xl font-black text-white mb-4 group-hover:text-blue-400 transition-colors">
@@ -933,8 +933,8 @@ const App = () => {
                       </td>
                       {universities.map(u => (
                         <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 text-white align-top">
-                           <div className="text-[14px] font-bold leading-relaxed whitespace-pre-wrap h-full overflow-y-auto no-scrollbar pr-1 scroll-smooth">
-                             {renderTextWithHighlights(u.extracts[1], "text-[14px]")}
+                           <div className="text-[16px] font-bold leading-relaxed whitespace-pre-wrap h-full overflow-y-auto no-scrollbar pr-1 scroll-smooth">
+                             {renderTextWithHighlights(u.extracts[1], "text-[16px]")}
                            </div>
                         </td>
                       ))}
@@ -950,7 +950,7 @@ const App = () => {
                         <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 align-top">
                            <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar h-full">
                              {u.pros.map((p, i) => (
-                               <div key={i} className="text-white text-[14px] font-bold leading-snug flex gap-2">
+                               <div key={i} className="text-white text-[16px] font-bold leading-snug flex gap-2">
                                  <span className="text-emerald-500 shrink-0">•</span><span>{p}</span>
                                </div>
                              ))}
@@ -967,7 +967,7 @@ const App = () => {
                       </td>
                       {universities.map(u => (
                         <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 align-top">
-                           <div className="text-neutral-200 text-[14px] font-medium leading-relaxed overflow-y-auto no-scrollbar h-full pr-1">
+                           <div className="text-neutral-200 text-[16px] font-medium leading-relaxed overflow-y-auto no-scrollbar h-full pr-1">
                               {u.extracts[3]}
                            </div>
                         </td>
@@ -996,7 +996,7 @@ const App = () => {
                    <div className="px-6 py-2 bg-blue-500/10 text-blue-400 rounded-full font-mono text-sm font-black border border-blue-500/20 uppercase tracking-[0.3em]">STRATEGY A • TECH DEPTH</div>
                 </div>
                 <h3 className="text-5xl font-black text-white tracking-tighter mb-8 leading-tight">底层科研实证型组合</h3>
-                <p className="text-neutral-400 text-3xl leading-relaxed font-light flex-1">
+                <p className="text-neutral-400 text-2xl leading-relaxed font-light flex-1">
                   推荐：<span className="text-white font-black underline decoration-blue-500 underline-offset-8">交大 + 上理工 + 华理</span>。
                   聚焦<HighlightText>底座解耦算法</HighlightText>、<HighlightText>高安全范式</HighlightText>与<HighlightText>生理量化验证</HighlightText>。构建绝对的技术壁垒，适合高阶智驾与国家级课题申报。
                 </p>
@@ -1008,7 +1008,7 @@ const App = () => {
                    <div className="px-6 py-2 bg-violet-500/10 text-violet-400 rounded-full font-mono text-sm font-black border border-violet-500/20 uppercase tracking-[0.3em]">STRATEGY B • USER EXPERIENCE</div>
                 </div>
                 <h3 className="text-5xl font-black text-white tracking-tighter mb-8 leading-tight">品牌差异感知型组合</h3>
-                <p className="text-neutral-400 text-3xl leading-relaxed font-light flex-1">
+                <p className="text-neutral-400 text-2xl leading-relaxed font-light flex-1">
                   推荐：<span className="text-white font-black underline decoration-violet-500 underline-offset-8">清华 + 交大 + 上理工</span>。
                   融合<HighlightText>情感体验IP</HighlightText>、<HighlightText>触觉信任模型</HighlightText>与<HighlightText>航空管理逻辑</HighlightText>。快速将硬核技术转化为用户可感知的量产卖点，塑造高端心智。
                 </p>
