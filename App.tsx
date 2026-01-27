@@ -52,7 +52,8 @@ import {
   Monitor,
   Maximize,
   Clock,
-  Users
+  Users,
+  Calculator
 } from 'lucide-react';
 import { INITIAL_UNIVERSITIES, INITIAL_TIMELINE, INITIAL_TOTAL_BUDGET, ENTERPRISE_PERCENT, GOVERNMENT_PERCENT } from './constants';
 import { UniversityData, TimelineNode } from './types';
@@ -70,6 +71,33 @@ const HighlightText = ({ children }: { children?: React.ReactNode }) => (
     {children}
   </span>
 );
+
+// Helper to render text with bold merits
+const renderTextWithHighlights = (text: string, fontSizeClass = "text-sm") => {
+  if (!text) return null;
+  const parts = text.split(/(\*\*可取之处：\*\*.*?\n|\*\*可取之处：\*\*.*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**可取之处：**')) {
+      return (
+        <div key={i} className="my-3 p-4 bg-blue-500/10 border-l-4 border-blue-500 rounded-r-xl shadow-lg">
+          <span className="text-blue-400 font-black block text-xs uppercase tracking-wider mb-2">💡 核心可取之处</span>
+          <span className={`text-white font-bold leading-snug ${fontSizeClass}`}>{part.replace(/\*\*/g, '')}</span>
+        </div>
+      );
+    }
+    const subParts = part.split(/(\*\*.*?\*\*)/g);
+    return (
+      <span key={i} className={fontSizeClass}>
+        {subParts.map((sub, j) => {
+          if (sub.startsWith('**') && sub.endsWith('**')) {
+            return <strong key={j} className="text-blue-300 font-bold">{sub.slice(2, -2)}</strong>;
+          }
+          return sub;
+        })}
+      </span>
+    );
+  });
+};
 
 // --- Gemini Service Integration ---
 const GeminiChatWidget = ({ isOpen, setIsOpen, autoPrompt, universities }: { isOpen: boolean, setIsOpen: (v: boolean) => void, autoPrompt: string, universities: UniversityData[] }) => {
@@ -154,7 +182,7 @@ ${u.summary}
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
             {messages.length === 0 && (
               <div className="text-neutral-500 text-sm text-center mt-10 px-4">
                 请就方案的投资优先级、技术风险或跨校组合向我提问。
@@ -279,8 +307,10 @@ const SectionContainer = ({ id, children, className = "", isLast = false }: { id
 
 // --- Asset Image Manager ---
 const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: UniversityData) => void }) => {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [scale, setScale] = useState(1);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -303,28 +333,59 @@ const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: Unive
   };
 
   const moveImage = (from: number, to: number) => {
+    if (from === to) return;
     const newImages = [...uni.assets.images];
     const [moved] = newImages.splice(from, 1);
     newImages.splice(to, 0, moved);
     onUpdate({ ...uni, assets: { ...uni.assets, images: newImages } });
   };
 
-  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      onUpdate({
-        ...uni,
-        assets: {
-          ...uni.assets,
-          pdf: { name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)}MB`, url: URL.createObjectURL(file) }
-        }
-      });
-    }
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    moveImage(fromIndex, toIndex);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const closePreview = () => {
-    setPreviewUrl(null);
+    setPreviewIndex(null);
     setScale(1);
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (previewIndex === null) return;
+    setPreviewIndex((previewIndex + 1) % uni.assets.images.length);
+    setScale(1);
+  };
+
+  const handlePrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (previewIndex === null) return;
+    setPreviewIndex((previewIndex - 1 + uni.assets.images.length) % uni.assets.images.length);
+    setScale(1);
+  };
+
+  const handleZoomIn = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setScale(prev => Math.min(prev + 0.25, 3));
+  };
+
+  const handleZoomOut = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setScale(prev => Math.max(prev - 0.25, 0.5));
   };
 
   return (
@@ -339,10 +400,6 @@ const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: Unive
             <Plus className="w-5 h-5" /> 上传图片
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
           </label>
-          <label className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-5 py-2.5 rounded-xl text-sm font-black cursor-pointer flex items-center gap-2 transition-all active:scale-95 border border-neutral-700 shadow-xl">
-            <FileText className="w-5 h-5" /> {uni.assets.pdf ? '更新 PDF' : '上传 PDF'}
-            <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} />
-          </label>
         </div>
       </div>
 
@@ -350,23 +407,29 @@ const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: Unive
         {uni.assets.images.map((img, i) => (
           <div 
             key={i} 
-            className="group relative aspect-video bg-neutral-900 rounded-3xl overflow-hidden border border-neutral-800 shadow-2xl"
+            className={`group flex flex-col bg-neutral-900 rounded-3xl overflow-hidden border border-neutral-800 shadow-2xl transition-all duration-200 
+              ${draggedIndex === i ? 'opacity-30 scale-95 blur-sm' : 'opacity-100'} 
+              ${dragOverIndex === i ? 'border-blue-500 ring-2 ring-blue-500/30' : 'hover:border-blue-500/50'}`}
             draggable
-            onDragStart={(e) => e.dataTransfer.setData('text/plain', i.toString())}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              const from = parseInt(e.dataTransfer.getData('text/plain'));
-              moveImage(from, i);
-            }}
+            onDragStart={(e) => handleDragStart(e, i)}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDragLeave={() => setDragOverIndex(null)}
+            onDrop={(e) => handleDrop(e, i)}
+            onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
           >
-            <img src={img.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-              <button onClick={() => setPreviewUrl(img.url)} className="p-3 bg-blue-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Maximize className="w-5 h-5" /></button>
-              <button onClick={() => removeImage(i)} className="p-3 bg-rose-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Trash2 className="w-5 h-5" /></button>
-              <div className="cursor-move p-3 bg-neutral-700 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><GripVertical className="w-5 h-5" /></div>
+            <div className="relative aspect-video overflow-hidden">
+              <img src={img.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-md p-1.5 rounded-lg border border-white/10 cursor-move">
+                <GripVertical className="w-4 h-4 text-white/70" />
+              </div>
+              <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                <button onClick={() => setPreviewIndex(i)} className="p-3 bg-blue-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Maximize className="w-5 h-5" /></button>
+                <button onClick={() => removeImage(i)} className="p-3 bg-rose-600 rounded-2xl text-white hover:scale-110 transition-transform shadow-xl"><Trash2 className="w-5 h-5" /></button>
+              </div>
             </div>
-            <div className="absolute bottom-4 left-4 bg-neutral-900/90 backdrop-blur-xl px-3 py-1.5 rounded-xl text-xs text-neutral-200 font-mono border border-white/5">
-              #{i+1} {img.label.slice(0, 20)}
+            <div className="p-4 bg-neutral-950/50 flex items-center gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-neutral-800 flex items-center justify-center text-[10px] font-mono text-neutral-500 border border-white/5">#{i+1}</span>
+              <span className="text-xs text-neutral-300 font-mono truncate flex-1" title={img.label}>{img.label}</span>
             </div>
           </div>
         ))}
@@ -378,20 +441,62 @@ const ImageWall = ({ uni, onUpdate }: { uni: UniversityData, onUpdate: (u: Unive
         )}
       </div>
 
-      {previewUrl && (
+      {previewIndex !== null && (
         <div className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center animate-in fade-in zoom-in duration-300">
           <div className="relative w-full h-full flex items-center justify-center p-20" onClick={closePreview}>
-            <div className="absolute top-10 right-10 flex gap-4 z-10" onClick={e => e.stopPropagation()}>
-               <button onClick={() => setScale(s => Math.min(s + 0.2, 5))} className="p-4 bg-neutral-800 rounded-2xl text-white hover:bg-neutral-700 transition-colors"><ZoomIn className="w-6 h-6"/></button>
-               <button onClick={() => setScale(s => Math.max(s - 0.2, 0.5))} className="p-4 bg-neutral-800 rounded-2xl text-white hover:bg-neutral-700 transition-colors"><ZoomOut className="w-6 h-6"/></button>
-               <button onClick={closePreview} className="p-4 bg-rose-600 rounded-2xl text-white hover:bg-rose-500 transition-colors"><X className="w-6 h-6"/></button>
+            
+            {/* Top Toolbar */}
+            <div className="absolute top-10 left-0 w-full flex justify-between px-10 items-center z-10" onClick={e => e.stopPropagation()}>
+               <div className="flex items-center gap-4">
+                  <div className="bg-neutral-800/80 backdrop-blur-md border border-white/10 px-6 py-2 rounded-2xl flex items-center gap-3">
+                    <span className="text-blue-400 font-black text-sm">IMAGE {previewIndex + 1} / {uni.assets.images.length}</span>
+                    <span className="w-px h-4 bg-white/20"></span>
+                    <span className="text-white/60 text-xs font-mono truncate max-w-[200px]">{uni.assets.images[previewIndex].label}</span>
+                  </div>
+                  <div className="flex bg-neutral-800/80 backdrop-blur-md border border-white/10 rounded-2xl p-1 gap-1">
+                    <button onClick={handleZoomOut} className="p-2 text-white hover:bg-neutral-700 rounded-xl transition-colors"><ZoomOut className="w-5 h-5"/></button>
+                    <span className="flex items-center px-2 text-[10px] font-mono text-white/50">{Math.round(scale * 100)}%</span>
+                    <button onClick={handleZoomIn} className="p-2 text-white hover:bg-neutral-700 rounded-xl transition-colors"><ZoomIn className="w-5 h-5"/></button>
+                  </div>
+               </div>
+               <button onClick={closePreview} className="p-4 bg-rose-600/80 backdrop-blur-md border border-rose-400/20 rounded-2xl text-white hover:bg-rose-500 transition-colors shadow-2xl shadow-rose-900/20"><X className="w-6 h-6"/></button>
             </div>
-            <img 
-              src={previewUrl} 
-              className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] transition-transform duration-200" 
-              style={{ transform: `scale(${scale})` }}
-              onClick={e => e.stopPropagation()}
-            />
+
+            {/* Navigation Arrows */}
+            <button 
+              onClick={handlePrev} 
+              className="absolute left-10 top-1/2 -translate-y-1/2 p-6 bg-white/5 hover:bg-white/10 text-white rounded-full backdrop-blur-sm border border-white/10 transition-all hover:scale-110 z-10 group"
+            >
+              <ChevronLeft className="w-10 h-10 group-active:scale-90 transition-transform" />
+            </button>
+            
+            <button 
+              onClick={handleNext} 
+              className="absolute right-10 top-1/2 -translate-y-1/2 p-6 bg-white/5 hover:bg-white/10 text-white rounded-full backdrop-blur-sm border border-white/10 transition-all hover:scale-110 z-10 group"
+            >
+              <ChevronRight className="w-10 h-10 group-active:scale-90 transition-transform" />
+            </button>
+
+            {/* Main Image */}
+            <div className="relative w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
+              <img 
+                src={uni.assets.images[previewIndex].url} 
+                className="max-w-full max-h-full object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] transition-transform duration-300 pointer-events-auto cursor-grab active:cursor-grabbing" 
+                style={{ transform: `scale(${scale})` }}
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Bottom Index dots */}
+            <div className="absolute bottom-10 left-0 w-full flex justify-center gap-2" onClick={e => e.stopPropagation()}>
+              {uni.assets.images.map((_, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => setPreviewIndex(i)}
+                  className={`h-1.5 transition-all rounded-full ${i === previewIndex ? 'w-10 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'w-2 bg-white/20 hover:bg-white/40'}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -457,10 +562,9 @@ const App = () => {
             2025~2026 校企共创方案<span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-violet-400 to-emerald-400 mx-6">深度分析报告</span>
           </div>
           
-          <div className="grid grid-cols-4 gap-16 w-full max-w-6xl border-t border-neutral-800 pt-16">
+          <div className="grid grid-cols-3 gap-24 w-full max-w-5xl border-t border-neutral-800 pt-16">
             {[
               { label: '入围高校', val: universities.length, unit: '所' },
-              { label: '核心指标', val: '12', unit: '项' },
               { label: '预算池', val: (totalBudget / 10000).toFixed(0), unit: '万' },
               { label: '项目周期', val: '18', unit: '月' }
             ].map((stat, i) => (
@@ -477,38 +581,45 @@ const App = () => {
 
       {/* 2. Background */}
       <SectionContainer id="background">
-        <div className="h-full flex flex-col justify-center max-h-[90vh]">
+        <div className="h-full flex flex-col justify-center py-10 max-h-[90vh]">
           <h2 className="text-5xl font-bold mb-10 text-white flex items-center gap-6">
             <span className="text-blue-500 font-mono text-3xl border-b-4 border-blue-500 pb-2">01.</span>
             项目背景与现有技术基座
           </h2>
           <div className="grid grid-cols-12 gap-8 items-stretch flex-1 overflow-hidden">
-             <div className="col-span-5 flex flex-col gap-6">
-                <div className="bg-neutral-900/60 p-10 rounded-[2.5rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-rose-500/50 transition-all flex-1">
-                  <AlertCircle className="text-rose-500 w-12 h-12 mb-6" />
-                  <h3 className="text-3xl font-black text-white mb-4">核心痛点</h3>
-                  <p className="text-neutral-400 text-2xl leading-relaxed font-light">
-                    L3级自动驾驶中，线控转向失去物理连接，导致“数字路感”缺失，驾驶员面临<HighlightText>强烈的操控心理脱节与信任隔阂</HighlightText>。
+             <div className="col-span-5 flex flex-col gap-4">
+                <div className="flex-1 bg-neutral-900/60 p-6 rounded-[2rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-rose-500/50 transition-all justify-center">
+                  <AlertCircle className="text-rose-500 w-8 h-8 mb-2 shrink-0" />
+                  <h3 className="text-xl font-black text-white mb-1">操控脱节</h3>
+                  <p className="text-neutral-400 text-lg leading-relaxed font-light">
+                    L3级自动驾驶中，线控转向失去物理连接，导致“数字路感”缺失，驾驶员面临<HighlightText>操控心理脱节与信任隔阂</HighlightText>。
                   </p>
                 </div>
-                <div className="bg-neutral-900/60 p-10 rounded-[2.5rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-emerald-500/50 transition-all flex-1">
-                  <ShieldCheck className="text-emerald-500 w-12 h-12 mb-6" />
-                  <h3 className="text-3xl font-black text-white mb-4">合规要求</h3>
-                  <p className="text-neutral-400 text-2xl leading-relaxed font-light">
-                    <HighlightText>需满足国家自然科学基金基础研究深度</HighlightText>，并适配智己量产车型交付规范。
+                <div className="flex-1 bg-neutral-900/60 p-6 rounded-[2rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-blue-500/50 transition-all justify-center">
+                  <Monitor className="text-blue-400 w-8 h-8 mb-2 shrink-0" />
+                  <h3 className="text-xl font-black text-white mb-1">交互更新需求</h3>
+                  <p className="text-neutral-400 text-lg leading-relaxed font-light">
+                    现有双屏座舱布局亟待更新系统级交互设计，以满足人们对<HighlightText>AI时代</HighlightText>的车机系统使用期望和需求。
+                  </p>
+                </div>
+                <div className="flex-1 bg-neutral-900/60 p-6 rounded-[2rem] border border-neutral-800 flex flex-col shadow-xl group hover:border-emerald-500/50 transition-all justify-center">
+                  <ShieldCheck className="text-emerald-500 w-8 h-8 mb-2 shrink-0" />
+                  <h3 className="text-xl font-black text-white mb-1">科研合规</h3>
+                  <p className="text-neutral-400 text-lg leading-relaxed font-light">
+                    需满足<HighlightText>自然基金基础研究深度</HighlightText>，并适配智己量产车型交付规范。
                   </p>
                 </div>
              </div>
 
              <div className="col-span-7 bg-gradient-to-br from-blue-900/20 to-neutral-900/40 p-12 rounded-[4rem] border border-blue-500/30 flex flex-col shadow-2xl relative overflow-hidden group">
                 <Cpu className="absolute -right-10 -bottom-10 opacity-10 w-96 h-96 text-blue-400 group-hover:scale-110 transition-transform" />
-                <div className="flex items-center gap-6 mb-12">
+                <div className="flex items-center gap-6 mb-12 shrink-0">
                    <div className="bg-blue-600 p-5 rounded-3xl">
                       <Binary className="text-white w-12 h-12" />
                    </div>
                    <h3 className="text-5xl font-black text-blue-400 tracking-tight">现有技术基座支撑</h3>
                 </div>
-                <div className="space-y-12 relative z-10 flex-1">
+                <div className="space-y-10 relative z-10 flex-1 flex flex-col justify-center">
                    <div className="grid grid-cols-1 gap-10">
                       <div className="flex items-center gap-6 text-white text-3xl font-black">
                          <Zap className="w-8 h-8 text-blue-400" /> 恒星超级增程 <span className="text-neutral-500 font-normal text-xl">（动力架构）</span>
@@ -560,11 +671,11 @@ const App = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-10 flex-1 overflow-hidden">
-            <div className="bg-neutral-900/50 rounded-[3rem] p-12 border border-neutral-800 flex flex-col justify-center shadow-2xl h-full">
+            <div className="bg-neutral-900/50 rounded-[3rem] p-12 border border-neutral-800 flex flex-col justify-center shadow-2xl h-full relative">
                  <h3 className="text-3xl font-black text-neutral-300 mb-10 uppercase tracking-widest flex items-center gap-4">
                    <Layers className="w-8 h-8 text-blue-500"/> 资金分摊模型
                  </h3>
-                 <div className="flex gap-3 h-24 mb-12">
+                 <div className="flex gap-3 h-24 mb-6">
                     <div className="h-full bg-blue-600 rounded-l-[1.5rem] flex flex-col items-center justify-center shadow-lg shadow-blue-900/20" style={{width: `${ENTERPRISE_PERCENT}%`}}>
                        <span className="text-3xl font-black text-white">{ENTERPRISE_PERCENT.toFixed(2)}%</span>
                        <span className="text-[10px] text-white/70 font-bold">企业自筹资金</span>
@@ -574,6 +685,15 @@ const App = () => {
                        <span className="text-[10px] text-neutral-900/70 font-bold">政府专项补贴</span>
                     </div>
                  </div>
+                 
+                 {/* Calculation Formula Display */}
+                 <div className="flex items-center gap-3 px-6 py-4 bg-neutral-950 border border-neutral-800 rounded-2xl mb-10 self-start">
+                    <Calculator className="w-5 h-5 text-neutral-500" />
+                    <p className="text-neutral-500 font-mono text-xs font-bold tracking-tight">
+                       计算公式：企业投入 = 总预算 × {ENTERPRISE_PERCENT.toFixed(3)}% | 政府补贴 = 总预算 × {GOVERNMENT_PERCENT.toFixed(3)}% (X + 1.3X = 30)
+                    </p>
+                 </div>
+
                  <div className="space-y-6">
                     <div className="flex items-center justify-between p-8 rounded-[2rem] bg-neutral-950 border border-neutral-800 group transition-all hover:bg-neutral-900">
                         <span className="text-neutral-400 font-black text-xl tracking-wider">智己汽车预算投入</span>
@@ -596,13 +716,13 @@ const App = () => {
                     <div className={`absolute -left-[66px] top-1 w-6 h-6 rounded-full ${node.color} border-4 border-neutral-900 shadow-xl`}></div>
                     <div className="flex items-center gap-4 mb-1">
                       <span className="text-sm font-mono text-neutral-500 font-black">{node.date}</span>
-                      {idx === 0 && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-black uppercase">
-                          <Clock className="w-3 h-3"/> Process Delay (Pending Review)
-                        </span>
-                      )}
                     </div>
-                    <div className="text-3xl text-white font-black mb-2 tracking-tight">{node.title}</div>
+                    <div className="flex items-center gap-4 mb-2">
+                       <div className="text-3xl text-white font-black tracking-tight">{node.title}</div>
+                       {node.id === '1' && (
+                         <span className="px-3 py-1 bg-rose-500/20 text-rose-500 text-[10px] rounded-full border border-rose-500/30 font-black animate-pulse tracking-widest">DELAY</span>
+                       )}
+                    </div>
                     <div className="text-neutral-400 text-xl leading-relaxed font-light">{node.description}</div>
                   </div>
                 ))}
@@ -618,8 +738,8 @@ const App = () => {
           <React.Fragment key={uni.id}>
             <SectionContainer id={`${uni.id}-content`} className="bg-[#050505]">
               <div className="h-full flex flex-row gap-12 pb-10 max-h-[90vh]">
-                <div className="w-[32%] flex flex-col h-full py-4 border-r border-neutral-800/80 pr-10">
-                  <div className="mb-12">
+                <div className="w-[32%] flex flex-col h-full py-4 border-r border-neutral-800/80 pr-10 overflow-hidden">
+                  <div className="mb-8">
                     <div className="flex items-center gap-8 mb-10">
                       <div className={`w-24 h-24 rounded-[2rem] ${uni.themeColor} text-white text-6xl font-black flex items-center justify-center shadow-2xl shadow-black/50`}>
                         {uni.logoLetter}
@@ -633,86 +753,85 @@ const App = () => {
                     </div>
                   </div>
 
-                  <div className="flex-1"></div>
+                  <div className="flex-1 flex flex-col gap-8 overflow-hidden">
+                    <div className="bg-neutral-900/60 p-8 rounded-[2.5rem] border border-neutral-800 shadow-xl flex flex-col relative overflow-hidden shrink-0">
+                       <h4 className="text-blue-400 font-black mb-4 text-sm uppercase tracking-[0.4em] flex items-center gap-3">
+                          <Compass className="w-6 h-6" /> 核心创意概念
+                       </h4>
+                       <div className="text-neutral-100 text-xl leading-relaxed font-bold overflow-y-auto no-scrollbar">
+                         {uni.concept}
+                       </div>
+                    </div>
 
-                  <div className="bg-gradient-to-br from-blue-600/20 via-violet-600/10 to-transparent border border-blue-500/30 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl">
-                    <Sparkles className="absolute -top-10 -right-10 w-48 h-48 text-blue-500/10" />
-                    <h4 className="text-blue-400 font-black mb-6 text-sm uppercase tracking-[0.4em] flex items-center gap-3">
-                       <Sparkles className="w-5 h-5" /> AI 综合深度评价
-                    </h4>
-                    <p className="text-3xl text-neutral-100 leading-[1.4] italic font-light">
-                       “{uni.summary}”
-                    </p>
+                    <div className="bg-gradient-to-br from-blue-600/20 via-violet-600/10 to-transparent border border-blue-500/30 rounded-[3rem] p-8 relative overflow-hidden shadow-2xl flex-1 flex flex-col justify-center">
+                      <Sparkles className="absolute -top-10 -right-10 w-48 h-48 text-blue-500/10" />
+                      <h4 className="text-blue-400 font-black mb-6 text-sm uppercase tracking-[0.4em] flex items-center gap-3">
+                         <Sparkles className="w-5 h-5" /> AI 综合深度评价
+                      </h4>
+                      <p className="text-2xl text-neutral-100 leading-[1.4] italic font-light overflow-y-auto no-scrollbar">
+                         “{uni.summary}”
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col gap-10 py-4 overflow-hidden">
-                   <div className="flex-[1.5] grid grid-cols-2 gap-10 overflow-hidden">
-                      {/* Synchronized styling for Concept and Logic */}
-                      <div className="bg-neutral-900/40 p-12 rounded-[3.5rem] border border-neutral-800 shadow-xl flex flex-col relative group overflow-hidden border-t-blue-500/50 border-t-4">
-                         <div className="flex items-center gap-5 mb-8 text-blue-400">
-                            <Layout className="w-9 h-9" />
-                            <h4 className="text-3xl font-black text-white uppercase tracking-wider">核心创意概念</h4>
-                         </div>
-                         <div className="text-neutral-100 text-2xl leading-[1.5] font-bold overflow-y-auto no-scrollbar pr-4">
-                           {uni.concept}
-                         </div>
+                   <div className="flex-[1.5] flex flex-col overflow-hidden bg-neutral-900/40 p-10 rounded-[3.5rem] border border-neutral-800 shadow-xl relative group border-t-blue-500/50 border-t-4">
+                      <div className="flex items-center gap-5 mb-6 text-blue-400 shrink-0">
+                         <Layout className="w-10 h-10" />
+                         <h4 className="text-3xl font-black text-white uppercase tracking-wider">交互构思模块（线控技术和屏幕布局）</h4>
                       </div>
-
-                      <div className="bg-neutral-900/40 p-12 rounded-[3.5rem] border border-neutral-800 shadow-xl flex flex-col relative group overflow-hidden border-t-violet-500/50 border-t-4">
-                         <div className="flex items-center gap-5 mb-8 text-violet-400">
-                            <Compass className="w-9 h-9" />
-                            <h4 className="text-3xl font-black text-white uppercase tracking-wider">方案设计逻辑</h4>
-                         </div>
-                         <div className="text-neutral-100 text-2xl leading-[1.5] font-bold overflow-y-auto no-scrollbar pr-4">
-                            {uni.extracts[1]?.replace('设计思路：', '')}
-                         </div>
+                      <div className="text-neutral-100 text-2xl leading-[1.6] font-medium overflow-y-auto no-scrollbar pr-6 whitespace-pre-wrap scroll-smooth custom-scrollbar">
+                        {renderTextWithHighlights(uni.extracts[1], "text-2xl")}
                       </div>
                    </div>
 
-                   <div className="flex-1 grid grid-cols-4 gap-6">
-                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-8 flex flex-col shadow-lg">
-                         <h5 className="text-blue-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Trello className="w-6 h-6" /> 实施规划</h5>
-                         <ul className="space-y-2 overflow-y-auto no-scrollbar">
-                           {uni.extracts[2]?.replace('方案规划：', '').split('。').filter(Boolean).map((p, i) => (
-                             <li key={i} className="text-white text-lg font-black leading-tight flex gap-2"><span className="text-blue-500 shrink-0">•</span>{p}</li>
-                           ))}
-                         </ul>
+                   <div className="flex-1 grid grid-cols-4 gap-6 overflow-hidden">
+                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-6 flex flex-col shadow-lg overflow-hidden">
+                         <h5 className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Trello className="w-5 h-5" /> 实施规划</h5>
+                         <div className="flex-1 overflow-y-auto no-scrollbar">
+                           <ul className="space-y-1">
+                             {uni.extracts[2]?.split('\n').filter(Boolean).map((p, i) => (
+                               <li key={i} className="text-white text-lg font-black leading-tight flex gap-2"><span className="text-blue-500 shrink-0">•</span>{p}</li>
+                             ))}
+                           </ul>
+                         </div>
                       </div>
-                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-8 flex flex-col shadow-lg">
-                         <h5 className="text-violet-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Award className="w-6 h-6" /> 团队资质</h5>
-                         <ul className="space-y-2 overflow-y-auto no-scrollbar">
-                           {uni.extracts[3]?.replace('实施计划：', '').replace('团队资质：', '').split('。').filter(Boolean).map((p, i) => (
-                             <li key={i} className="text-white text-lg font-black leading-tight flex gap-2"><span className="text-violet-500 shrink-0">•</span>{p}</li>
-                           ))}
-                         </ul>
+                      <div className="bg-neutral-800/40 border border-neutral-700 rounded-[2.5rem] p-6 flex flex-col shadow-lg overflow-hidden">
+                         <h5 className="text-violet-400 text-xs font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><Award className="w-5 h-5" /> 团队资质</h5>
+                         <div className="flex-1 overflow-y-auto no-scrollbar">
+                           <p className="text-white text-lg font-black leading-tight">
+                              {uni.extracts[3]}
+                           </p>
+                         </div>
                       </div>
-                      <div className="bg-emerald-500/10 rounded-[2.5rem] border border-emerald-500/30 p-8 flex flex-col shadow-lg">
-                         <h5 className="text-emerald-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><CheckCircle2 className="w-6 h-6" /> 优势</h5>
-                         <ul className="space-y-3 overflow-y-auto no-scrollbar">
-                           {uni.pros.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-emerald-500 shrink-0">•</span>{p}</li>)}
-                         </ul>
+                      <div className="bg-emerald-500/10 rounded-[2.5rem] border border-emerald-500/30 p-6 flex flex-col shadow-lg overflow-hidden">
+                         <h5 className="text-emerald-400 text-xs font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> 优势</h5>
+                         <div className="flex-1 overflow-y-auto no-scrollbar">
+                           <ul className="space-y-2">
+                             {uni.pros.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-emerald-500 shrink-0">•</span>{p}</li>)}
+                           </ul>
+                         </div>
                       </div>
-                      <div className="bg-rose-500/10 rounded-[2.5rem] border border-rose-500/30 p-8 flex flex-col shadow-lg">
-                         <h5 className="text-rose-400 text-sm font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><AlertCircle className="w-6 h-6" /> 劣势</h5>
-                         <ul className="space-y-3 overflow-y-auto no-scrollbar">
-                           {uni.cons.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-rose-500 shrink-0">•</span>{p}</li>)}
-                         </ul>
+                      <div className="bg-rose-500/10 rounded-[2.5rem] border border-rose-500/30 p-6 flex flex-col shadow-lg overflow-hidden">
+                         <h5 className="text-rose-400 text-xs font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5" /> 劣势</h5>
+                         <div className="flex-1 overflow-y-auto no-scrollbar">
+                           <ul className="space-y-2">
+                             {uni.cons.map((p, i) => <li key={i} className="text-white text-lg font-black leading-tight flex gap-3"><span className="text-rose-500 shrink-0">•</span>{p}</li>)}
+                           </ul>
+                         </div>
                       </div>
                    </div>
                 </div>
               </div>
             </SectionContainer>
 
-            {/* Page 2: Resource Gallery - Optimized for 16:9 compliance */}
+            {/* Page 2: Resource Gallery */}
             <SectionContainer id={`${uni.id}-resource`} className="bg-[#050505] border-t border-neutral-900">
               <div className="h-full flex flex-col pb-4 max-h-[90vh] overflow-hidden">
                 <div className="flex items-center gap-6 mb-4 border-b border-neutral-800 pb-4 shrink-0">
                   <div className={`w-12 h-12 rounded-xl ${uni.themeColor} flex items-center justify-center text-white text-2xl font-black`}>{uni.logoLetter}</div>
-                  <h3 className="text-4xl font-black text-white">方案资产与附件库 <span className="text-neutral-600 font-light mx-4">/</span> <span className="text-blue-500">{uni.name}</span></h3>
-                  <div className="ml-auto">
-                    <span className="px-4 py-2 bg-neutral-800 rounded-xl text-xs font-black text-blue-400 border border-blue-500/20 uppercase tracking-widest">{uni.abbr} EXCLUSIVE</span>
-                  </div>
+                  <h3 className="text-4xl font-black text-white">方案资产墙 <span className="text-neutral-600 font-light mx-4">/</span> <span className="text-blue-500">{uni.name}</span></h3>
                 </div>
 
                 <div className="flex-1 grid grid-cols-12 gap-8 overflow-hidden">
@@ -750,7 +869,6 @@ const App = () => {
                        )}
                     </div>
 
-                    {/* Fixed Dimension Matrix - Full visibility within 16:9 */}
                     <div className="flex-1 bg-neutral-900/40 p-8 rounded-[3rem] border border-neutral-800 flex flex-col shadow-xl overflow-hidden relative">
                        <h4 className="text-emerald-400 font-black mb-6 text-xl flex items-center gap-3">
                          <Activity className="w-6 h-6" /> 核心维度解析
@@ -776,7 +894,7 @@ const App = () => {
         ))}
       </div>
 
-      {/* 5. Summary - Horizontal Benchmarking Matrix - Redesigned based on reference */}
+      {/* 5. Summary - Benchmarking Matrix */}
       <SectionContainer id="summary" className="bg-[#0a0a0a]" isLast={false}>
         <div className="w-full flex flex-col h-full gap-8 py-4 overflow-hidden max-h-[90vh]">
           <div className="flex items-center justify-between shrink-0 mb-2">
@@ -784,89 +902,73 @@ const App = () => {
                 <h2 className="text-5xl font-black text-white tracking-tighter uppercase">横向对比矩阵</h2>
                 <span className="text-neutral-500 uppercase tracking-[0.4em] text-sm font-mono font-bold mt-2">2025~2026 CO-CREATION STRATEGIC PRIORITY MATRIX</span>
              </div>
-             <button onClick={() => { setChatAutoPrompt("针对智己AIOS，从这四个学校中选择3个进行组合，分别给出一份技术型和体验型的最优组合报告。"); setIsChatOpen(true); }} className="flex items-center gap-4 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-full font-black text-xl shadow-3xl transition-all hover:scale-105 shrink-0">
+             <button onClick={() => { setChatAutoPrompt("对比四校方案在智舱屏幕布局上的具体差异并给出融合建议。"); setIsChatOpen(true); }} className="flex items-center gap-4 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-full font-black text-xl shadow-3xl transition-all hover:scale-105 shrink-0">
                <Sparkles className="w-6 h-6" /> AI 决策咨询
              </button>
           </div>
           
-          <div className="bg-neutral-900 border border-neutral-700 rounded-[2.5rem] overflow-hidden shrink-0 shadow-2xl flex-1 max-h-[85%]">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-[2.5rem] overflow-hidden shrink-0 shadow-2xl flex-1 flex flex-col">
              <table className="w-full text-left border-collapse h-full table-fixed">
                 <thead>
-                   <tr className="bg-neutral-800/50 text-neutral-400 text-sm font-black uppercase tracking-[0.2em] border-b border-neutral-700">
+                   <tr className="bg-neutral-800/50 text-neutral-400 text-xs font-black uppercase tracking-[0.2em] border-b border-neutral-700 shrink-0">
                       <th className="p-3 w-[15%] text-center border-r border-neutral-700">评估维度</th>
                       {universities.map(u => (
                         <th key={u.id} className="p-3 border-r border-neutral-700 last:border-r-0 w-[21.25%]">
-                           <div className="flex items-center justify-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl ${u.themeColor} flex items-center justify-center text-white text-xl font-black shadow-xl`}>{u.logoLetter}</div>
-                              <span className="text-white text-2xl font-black tracking-tighter truncate">{u.name}</span>
+                           <div className="flex flex-col items-center justify-center text-center">
+                              <div className={`w-10 h-10 rounded-xl ${u.themeColor} flex items-center justify-center text-white text-xl font-black shadow-xl mb-1`}>{u.logoLetter}</div>
+                              <span className="text-white text-xl font-black tracking-tighter truncate">{u.abbr}</span>
+                              <span className="text-neutral-500 text-[11px] font-bold truncate max-w-[95%]">{u.name}</span>
                            </div>
                         </th>
                       ))}
                    </tr>
                 </thead>
-                <tbody className="text-base font-bold">
-                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
-                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
-                        <div className="flex flex-col items-center gap-1">
-                          <Sparkles className="w-7 h-7 text-violet-500" />
-                          <span className="text-lg tracking-tighter">AI 综合评价</span>
+                <tbody className="text-base font-bold flex-1">
+                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[50%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700 bg-neutral-900/40">
+                        <div className="flex flex-col items-center gap-2">
+                          <Compass className="w-8 h-8 text-violet-500" />
+                          <span className="text-lg tracking-tighter">交互概念</span>
                         </div>
                       </td>
                       {universities.map(u => (
-                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 text-white text-xl font-bold leading-relaxed overflow-y-auto align-top">
-                          {u.summary}
+                        <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 text-white align-top">
+                           <div className="text-[14px] font-bold leading-relaxed whitespace-pre-wrap h-full overflow-y-auto no-scrollbar pr-1 scroll-smooth">
+                             {renderTextWithHighlights(u.extracts[1], "text-[14px]")}
+                           </div>
                         </td>
                       ))}
                    </tr>
-                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
-                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
-                        <div className="flex flex-col items-center gap-1">
-                          <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[25%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700 bg-neutral-900/40">
+                        <div className="flex flex-col items-center gap-2">
+                          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                           <span className="text-lg tracking-tighter">方案优势</span>
                         </div>
                       </td>
                       {universities.map(u => (
-                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
-                           <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
+                        <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 align-top">
+                           <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar h-full">
                              {u.pros.map((p, i) => (
-                               <div key={i} className="text-emerald-400 text-xl font-bold leading-tight flex gap-2">
-                                 <span className="shrink-0">•</span><span className="text-white">{p}</span>
+                               <div key={i} className="text-white text-[14px] font-bold leading-snug flex gap-2">
+                                 <span className="text-emerald-500 shrink-0">•</span><span>{p}</span>
                                </div>
                              ))}
                            </div>
                         </td>
                       ))}
                    </tr>
-                   <tr className="border-b border-neutral-700 hover:bg-white/5 transition-colors h-[21%]">
-                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
-                        <div className="flex flex-col items-center gap-1">
-                          <AlertCircle className="w-7 h-7 text-rose-500" />
-                          <span className="text-lg tracking-tighter">方案劣势</span>
-                        </div>
-                      </td>
-                      {universities.map(u => (
-                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
-                           <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
-                             {u.cons.map((c, i) => (
-                               <div key={i} className="text-rose-400 text-xl font-bold leading-tight flex gap-2">
-                                 <span className="shrink-0">•</span><span className="text-neutral-400">{c}</span>
-                               </div>
-                             ))}
-                           </div>
-                        </td>
-                      ))}
-                   </tr>
-                   <tr className="hover:bg-white/5 transition-colors h-[21%]">
-                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700">
-                        <div className="flex flex-col items-center gap-1">
-                          <Users className="w-7 h-7 text-blue-500" />
+                   <tr className="hover:bg-white/5 transition-colors h-[25%]">
+                      <td className="p-3 font-black text-neutral-200 text-center border-r border-neutral-700 bg-neutral-900/40">
+                        <div className="flex flex-col items-center gap-2">
+                          <Users className="w-8 h-8 text-blue-500" />
                           <span className="text-lg tracking-tighter">团队资质</span>
                         </div>
                       </td>
                       {universities.map(u => (
-                        <td key={u.id} className="p-4 border-r border-neutral-700 last:border-r-0 align-top">
-                           <div className="text-white text-xl font-bold leading-relaxed overflow-y-auto no-scrollbar h-full">
-                              {u.extracts[3]?.replace('实施计划：', '').replace('团队资质：', '')}
+                        <td key={u.id} className="p-5 border-r border-neutral-700 last:border-r-0 align-top">
+                           <div className="text-neutral-200 text-[14px] font-medium leading-relaxed overflow-y-auto no-scrollbar h-full pr-1">
+                              {u.extracts[3]}
                            </div>
                         </td>
                       ))}
