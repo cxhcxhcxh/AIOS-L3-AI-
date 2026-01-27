@@ -524,6 +524,7 @@ const App = () => {
 
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatAutoPrompt, setChatAutoPrompt] = useState('');
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     localStorage.setItem('im-motors-universities', JSON.stringify(universities));
@@ -535,6 +536,23 @@ const App = () => {
 
   const updateUniversity = (newUni: UniversityData) => {
     setUniversities(prev => prev.map(u => u.id === newUni.id ? newUni : u));
+  };
+
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>, uni: UniversityData) => {
+    if (e.target.files?.[0]) {
+      const f = e.target.files[0];
+      updateUniversity({
+        ...uni, 
+        assets: {
+          ...uni.assets, 
+          pdf: {
+            name: f.name, 
+            size: (f.size/1024/1024).toFixed(1)+'MB', 
+            url: URL.createObjectURL(f)
+          }
+        }
+      });
+    }
   };
 
   const enterpriseAmount = Math.round(totalBudget * (ENTERPRISE_PERCENT / 100));
@@ -850,21 +868,38 @@ const App = () => {
                                  <p className="text-xs text-neutral-500 uppercase font-mono tracking-widest">PDF • {uni.assets.pdf.size}</p>
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <a href={uni.assets.pdf.url} target="_blank" className="flex items-center justify-center gap-2 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-2xl text-white font-black text-lg transition-all shadow-xl border border-neutral-700"><EyeIcon className="w-5 h-5"/> 预览</a>
-                              <a href={uni.assets.pdf.url} download className="flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black text-lg transition-all shadow-xl"><Download className="w-5 h-5"/> 下载</a>
+                            <div className="grid grid-cols-2 gap-2">
+                              <a href={uni.assets.pdf.url} target="_blank" className="flex items-center justify-center gap-2 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-2xl text-white font-black text-sm transition-all shadow-xl border border-neutral-700"><EyeIcon className="w-4 h-4"/> 预览</a>
+                              <a href={uni.assets.pdf.url} download className="flex items-center justify-center gap-2 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-2xl text-white font-black text-sm transition-all shadow-xl border border-neutral-700"><Download className="w-4 h-4"/> 下载</a>
                             </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button 
+                                onClick={() => pdfInputRef.current?.click()}
+                                className="flex items-center justify-center gap-2 py-3 bg-blue-600/20 hover:bg-blue-600 text-blue-500 hover:text-white rounded-2xl font-black text-sm transition-all border border-blue-500/30"
+                              >
+                                <RefreshCw className="w-4 h-4"/> 替换
+                              </button>
+                              <button 
+                                onClick={() => updateUniversity({...uni, assets: {...uni.assets, pdf: undefined}})}
+                                className="flex items-center justify-center gap-2 py-3 bg-rose-600/20 hover:bg-rose-600 text-rose-500 hover:text-white rounded-2xl font-black text-sm transition-all border border-rose-500/30"
+                              >
+                                <Trash2 className="w-4 h-4"/> 删除
+                              </button>
+                            </div>
+                            {/* Hidden input for replacement */}
+                            <input 
+                              type="file" 
+                              ref={pdfInputRef}
+                              className="hidden" 
+                              accept="application/pdf" 
+                              onChange={e => handlePdfUpload(e, uni)}
+                            />
                          </div>
                        ) : (
                          <label className="border-2 border-dashed border-neutral-800 rounded-[2rem] p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/40 transition-all">
                             <FileText className="w-12 h-12 text-neutral-700 mb-2"/>
                             <p className="text-neutral-500 text-xl font-black">上传方案 PDF</p>
-                            <input type="file" className="hidden" accept="application/pdf" onChange={e => {
-                              if (e.target.files?.[0]) {
-                                const f = e.target.files[0];
-                                updateUniversity({...uni, assets: {...uni.assets, pdf: {name: f.name, size: (f.size/1024/1024).toFixed(1)+'MB', url: URL.createObjectURL(f)}}});
-                              }
-                            }}/>
+                            <input type="file" className="hidden" accept="application/pdf" onChange={e => handlePdfUpload(e, uni)}/>
                          </label>
                        )}
                     </div>
